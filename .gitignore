@@ -1,43 +1,46 @@
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+*.pyd
+*.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-venv/
+
+# Virtual environments
 .venv/
+venv/
 env/
-ENV/
-.vscode/
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-.Spotlight-V100
-.Trashes
-*.log
-.ipynb_checkpoints/
+
+# Tool caches
 .pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
 .mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
 .idea/
-.env
-.env.*
-*.swp
-*.swo
-*~
+.vscode/
+
+# Runtime logs
+*.log
+
+# Local exports / temp data
+example_object_path.txt
+promt.md
+answer.md
+
+# Generated pipeline outputs
+example_material/rendered_imgs/
+example_material/collages_3/
+example_material/collages_4/
+example_material/collages_6/
+results_no_rag/
+results_rag/
+metrics/
