@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.venv/
+.env
+alembic/versions/__pycache__/
+app/__pycache__/
+app/api/__pycache__/
+app/api/routes/__pycache__/
+app/core/__pycache__/
+app/db/__pycache__/
+app/models/__pycache__/
