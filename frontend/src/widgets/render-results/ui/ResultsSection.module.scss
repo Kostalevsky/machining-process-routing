@@ -1,0 +1,61 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.previewCard,
+.galleryCard,
+.jsonCard {
+  border: 1px solid #d8d8d8;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.previewCard {
+  min-height: 405px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.previewPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #8a8a8a;
+  text-align: center;
+}
+
+.previewImage {
+  width: 100%;
+  height: 100%;
+  min-height: 324px;
+  object-fit: contain;
+  border-radius: 18px;
+}
+
+.galleryCard,
+.jsonCard {
+  padding: 18px;
+}
+
+.blockTitle {
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .previewCard {
+    min-height: 280px;
+  }
+
+  .previewImage {
+    min-height: 232px;
+  }
+}
