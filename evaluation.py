@@ -14,16 +14,18 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 def generate_response_from_image(api_key, prompt):
     openai.api_key = api_key
 
-    # Obtain additional context from RAG
-    csv_path="./example_material/equipment_iso.csv"
+    csv_path = "./example_material/equipment_iso_ru.csv"
     rag_context = llm_benchmarks.retrieve_relevant_data(prompt, csv_path)
 
-    # Formulate context for the model
     rag_prompt = "Use the following information about available equipment and standards:\n"
     for item in rag_context:
         rag_prompt += (
-            f"- Equipment: {item['Equipment category']}, "
-            f"ISO: {item['ISO']}, Name of ISO: {item['Name of ISO']}\n"
+            f"- Equipment: {item.get('Equipment category', '')}, "
+            f"Equipment RU: {item.get('Equipment category ru', '')}, "
+            f"Operation: {item.get('Operation category', '')}, "
+            f"GOST: {item.get('GOST', '')}, "
+            f"Title: {item.get('Name of GOST', '')}, "
+            f"Stage: {item.get('Process stage', '')}\n"
         )
 
     full_prompt = prompt + "\n\n" + rag_prompt
