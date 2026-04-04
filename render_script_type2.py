@@ -16,6 +16,7 @@ import bpy
 from mathutils import Vector
 from mathutils.noise import random_unit_vector
 import pickle
+import numpy as np
 
 MAX_DEPTH = 5.0
 FORMAT_VERSION = 6
@@ -88,31 +89,181 @@ def scene_meshes():
         if isinstance(obj.data, (bpy.types.Mesh)):
             yield obj
 
+def get_scene_vertices_world():
+    vertices = []
+
+    for obj in scene_meshes():
+        matrix_world = obj.matrix_world
+        for vert in obj.data.vertices:
+            vertices.append(matrix_world @ vert.co)
+
+    if not vertices:
+        raise RuntimeError("no mesh vertices found in scene")
+
+    return vertices
+
+
+def compute_scene_centroid():
+    vertices = get_scene_vertices_world()
+    centroid = Vector((0.0, 0.0, 0.0))
+
+    for v in vertices:
+        centroid += v
+
+    centroid /= len(vertices)
+    return centroid
+
+
+def get_scene_vertices_world():
+    vertices = []
+
+    for obj in scene_meshes():
+        matrix_world = obj.matrix_world
+        for vert in obj.data.vertices:
+            vertices.append(matrix_world @ vert.co)
+
+    if not vertices:
+        raise RuntimeError("no mesh vertices found in scene")
+
+    return vertices
+
+
+def compute_scene_centroid(vertices=None):
+    if vertices is None:
+        vertices = get_scene_vertices_world()
+
+    centroid = Vector((0.0, 0.0, 0.0))
+    for v in vertices:
+        centroid += v
+
+    centroid /= len(vertices)
+    return centroid
+
+
+def compute_pca_axes(vertices):
+    coords = np.array([[v.x, v.y, v.z] for v in vertices], dtype=np.float64)
+
+    if coords.shape[0] < 3:
+        raise RuntimeError("not enough vertices for PCA")
+
+    centroid = coords.mean(axis=0)
+    centered = coords - centroid
+
+    cov = np.cov(centered, rowvar=False)
+    eigenvalues, eigenvectors = np.linalg.eigh(cov)
+
+    order = np.argsort(eigenvalues)[::-1]
+    eigenvectors = eigenvectors[:, order]
+
+    if np.linalg.det(eigenvectors) < 0:
+        eigenvectors[:, 2] *= -1.0
+
+    return eigenvectors
+
+
+def apply_rotation_to_scene(rotation_matrix_np):
+    rotation_matrix = Matrix(rotation_matrix_np.tolist()).to_4x4()
+
+    for obj in scene_root_objects():
+        obj.matrix_world = rotation_matrix @ obj.matrix_world
+
+    bpy.context.view_layer.update()
+
+
+def project_vertices(vertices, axes_matrix):
+    coords = np.array([[v.x, v.y, v.z] for v in vertices], dtype=np.float64)
+    return coords @ axes_matrix
+
+
+def fix_pca_axis_signs(vertices, eigenvectors):
+    projected = project_vertices(vertices, eigenvectors)
+
+    fixed = eigenvectors.copy()
+
+    min_x = projected[:, 0].min()
+    max_x = projected[:, 0].max()
+    if abs(min_x) > abs(max_x):
+        fixed[:, 0] *= -1.0
+        projected[:, 0] *= -1.0
+
+    mean_z = projected[:, 2].mean()
+    if mean_z < 0:
+        fixed[:, 2] *= -1.0
+        projected[:, 2] *= -1.0
+
+    x_axis = fixed[:, 0]
+    z_axis = fixed[:, 2]
+    y_axis = np.cross(z_axis, x_axis)
+
+    y_norm = np.linalg.norm(y_axis)
+    if y_norm < 1e-8:
+        raise RuntimeError("degenerate PCA axes while fixing signs")
+
+    y_axis = y_axis / y_norm
+
+    x_axis = x_axis / np.linalg.norm(x_axis)
+    z_axis = z_axis / np.linalg.norm(z_axis)
+
+    fixed[:, 0] = x_axis
+    fixed[:, 1] = y_axis
+    fixed[:, 2] = z_axis
+
+    if np.linalg.det(fixed) < 0:
+        fixed[:, 1] *= -1.0
+
+    return fixed
+
+
+def compute_rms_radius(vertices=None):
+    if vertices is None:
+        vertices = get_scene_vertices_world()
+
+    if not vertices:
+        raise RuntimeError("no vertices found for RMS radius computation")
+
+    coords = np.array([[v.x, v.y, v.z] for v in vertices], dtype=np.float64)
+    squared_norms = np.sum(coords ** 2, axis=1)
+    rms_radius = np.sqrt(np.mean(squared_norms))
+
+    if rms_radius < 1e-8:
+        raise RuntimeError("degenerate geometry: RMS radius is too small")
+
+    return float(rms_radius)
+
 
 def normalize_scene():
-    #if len(list(scene_root_objects())) > 1:
-    #    # Create an empty object to be used as a parent for all root objects
-    #    parent_empty = bpy.data.objects.new("ParentEmpty", None)
-    #    bpy.context.scene.collection.objects.link(parent_empty)
+    vertices = get_scene_vertices_world()
 
-    #    # Parent all root objects to the empty object
-    #    for obj in scene_root_objects():
-    #        if obj != parent_empty:
-    #            obj.parent = parent_empty
-    bbox_min, bbox_max = scene_bbox()
-    scale = 1 / max(bbox_max - bbox_min)
+    centroid = compute_scene_centroid(vertices)
+    for obj in scene_root_objects():
+        obj.matrix_world.translation -= centroid
+
+    bpy.context.view_layer.update()
+
+    centered_vertices = get_scene_vertices_world()
+    pca_axes = compute_pca_axes(centered_vertices)
+
+    fixed_axes = fix_pca_axis_signs(centered_vertices, pca_axes)
+
+    rotation_to_canonical = fixed_axes.T
+    apply_rotation_to_scene(rotation_to_canonical)
+
+    bpy.context.view_layer.update()
+
+    rotated_vertices = get_scene_vertices_world()
+    rms_radius = compute_rms_radius(rotated_vertices)
+    scale = 1.0 / rms_radius
 
     for obj in scene_root_objects():
         obj.scale = obj.scale * scale
 
-    # Apply scale to matrix_world.
     bpy.context.view_layer.update()
 
-    bbox_min, bbox_max = scene_bbox()
-    offset = -(bbox_min + bbox_max) / 2
+    final_centroid = compute_scene_centroid()
     for obj in scene_root_objects():
-        obj.matrix_world.translation += offset
+        obj.matrix_world.translation -= final_centroid
 
+    bpy.context.view_layer.update()
     bpy.ops.object.select_all(action="DESELECT")
 
 
