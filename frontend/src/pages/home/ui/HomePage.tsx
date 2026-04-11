@@ -1,14 +1,22 @@
 import { ModelUploadCard, useModelProcessing } from "../../../features/model-processing";
+import { UserProfile } from "../../../shared/lib/mockAuth";
 import { AppHeader } from "../../../widgets/app-header";
 import { ResultsSection } from "../../../widgets/render-results";
 import styles from "./HomePage.module.scss";
 
-export function HomePage() {
+type HomePageProps = {
+  currentPath: string;
+  profile: UserProfile;
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+};
+
+export function HomePage({ currentPath, profile, onNavigate, onLogout }: HomePageProps) {
   const { file, stage, error, images, jsons, engine, canSubmit, onSelect, submit, setEngine } = useModelProcessing();
 
   return (
     <div className={styles.page}>
-      <AppHeader />
+      <AppHeader currentPath={currentPath} profile={profile} onNavigate={onNavigate} onLogout={onLogout} />
 
       <main className={styles.main}>
         <div className={styles.layout}>

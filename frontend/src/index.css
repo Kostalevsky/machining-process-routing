@@ -25,6 +25,7 @@ body,
 
 body {
   margin: 0;
+  min-width: 320px;
 }
 
 button,
@@ -41,4 +42,10 @@ select {
 
 a {
   color: inherit;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
 }
