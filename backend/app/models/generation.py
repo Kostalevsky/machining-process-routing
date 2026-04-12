@@ -8,12 +8,24 @@ from app.models.enums import GenerationStatus
 from app.models.mixins import TimestampMixin
 
 
+def _enum_values(enum_cls) -> list[str]:
+    return [item.value for item in enum_cls]
+
+
 class Generation(TimestampMixin, Base):
     __tablename__ = "generations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True, nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("runs.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     input_collage_artifact_id: Mapped[int | None] = mapped_column(
         ForeignKey("artifacts.id", ondelete="SET NULL"),
         nullable=True,
@@ -26,7 +38,7 @@ class Generation(TimestampMixin, Base):
     model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[GenerationStatus] = mapped_column(
-        Enum(GenerationStatus, name="generation_status"),
+        Enum(GenerationStatus, name="generation_status", values_callable=_enum_values),
         default=GenerationStatus.PENDING,
         nullable=False,
     )

@@ -30,6 +30,7 @@ Thumbs.db
 
 # Runtime logs
 *.log
+backend/e2e-results/
 
 # Local exports / temp data
 example_object_path.txt

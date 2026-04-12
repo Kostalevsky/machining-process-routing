@@ -1,7 +1,7 @@
 import enum
 
 
-class RunStatus(str, enum.Enum):
+class RunStatus(enum.StrEnum):
     CREATED = "created"
     SOURCE_UPLOADED = "source_uploaded"
     RENDERING = "rendering"
@@ -12,14 +12,14 @@ class RunStatus(str, enum.Enum):
     FAILED = "failed"
 
 
-class ArtifactType(str, enum.Enum):
+class ArtifactType(enum.StrEnum):
     SOURCE_OBJ = "source_obj"
     RENDER = "render"
     COLLAGE = "collage"
     GENERATED_JSON = "generated_json"
 
 
-class GenerationStatus(str, enum.Enum):
+class GenerationStatus(enum.StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"

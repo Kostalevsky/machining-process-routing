@@ -4,7 +4,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Machining Process Routing API"
     api_prefix: str = "/api/v1"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/machining_process_routing"
+    database_url: str = (
+        "postgresql+psycopg://postgres:postgres@localhost:5432/machining_process_routing"
+    )
+    jwt_secret_key: str = "change-me-access-secret-key-at-least-32-bytes"
+    jwt_refresh_secret_key: str = "change-me-refresh-secret-key-at-least-32-bytes"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 14
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_public_endpoint_url: str = "http://localhost:9000"
+    s3_access_key: str = "minioadmin"
+    s3_secret_key: str = "minioadmin"
+    s3_bucket: str = "machining-process-routing"
+    s3_region: str = "us-east-1"
+    s3_presign_expire_seconds: int = 3600
 
     model_config = SettingsConfigDict(
         env_file=".env",

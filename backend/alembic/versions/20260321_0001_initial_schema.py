@@ -5,9 +5,9 @@ Revises:
 Create Date: 2026-03-21 15:45:00
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = "20260321_0001"
 down_revision = None
@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-run_status = sa.Enum(
+run_status = postgresql.ENUM(
     "created",
     "source_uploaded",
     "rendering",
@@ -25,22 +25,25 @@ run_status = sa.Enum(
     "completed",
     "failed",
     name="run_status",
+    create_type=False,
 )
 
-artifact_type = sa.Enum(
+artifact_type = postgresql.ENUM(
     "source_obj",
     "render",
     "collage",
     "generated_json",
     name="artifact_type",
+    create_type=False,
 )
 
-generation_status = sa.Enum(
+generation_status = postgresql.ENUM(
     "pending",
     "running",
     "succeeded",
     "failed",
     name="generation_status",
+    create_type=False,
 )
 
 
