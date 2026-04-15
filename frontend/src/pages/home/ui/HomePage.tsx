@@ -12,7 +12,9 @@ type HomePageProps = {
 };
 
 export function HomePage({ currentPath, profile, onNavigate, onLogout }: HomePageProps) {
-  const { file, stage, error, images, jsons, engine, canSubmit, onSelect, submit, setEngine } = useModelProcessing();
+  const { file, stage, error, engine, canSubmit, onSelect, submit, setEngine } = useModelProcessing({
+    onComplete: () => onNavigate("/route-preview"),
+  });
 
   return (
     <div className={styles.page}>
@@ -34,7 +36,7 @@ export function HomePage({ currentPath, profile, onNavigate, onLogout }: HomePag
           </section>
 
           <aside className={styles.resultsColumn}>
-            <ResultsSection images={images} jsons={jsons} />
+            <ResultsSection images={[]} jsons={[]} />
           </aside>
         </div>
       </main>

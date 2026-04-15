@@ -83,6 +83,13 @@ export function AppHeader({ currentPath, profile, onNavigate, onLogout }: AppHea
               >
                 Личный кабинет
               </button>
+              <button
+                type="button"
+                className={currentPath === "/history" ? styles.menuItemActive : styles.menuItem}
+                onClick={() => handleNavigate("/history")}
+              >
+                История просмотров
+              </button>
               <button type="button" className={styles.menuItem} onClick={handleLogoutClick}>
                 Выйти
               </button>

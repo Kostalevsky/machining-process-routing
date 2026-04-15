@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { AuthPage } from "../pages/auth";
+import { HistoryPage } from "../pages/history";
 import { HomePage } from "../pages/home";
 import { ProfilePage } from "../pages/profile";
+import { RoutePreviewPage } from "../pages/route-preview";
+import { getCurrentMockResult } from "../shared";
 import {
   getSessionState,
   loginWithMock,
@@ -13,6 +16,7 @@ import {
 export function AppRouter() {
   const [pathname, setPathname] = useState(window.location.pathname || "/");
   const [session, setSession] = useState(getSessionState);
+  const previewResult = pathname === "/route-preview" ? getCurrentMockResult() : null;
 
   useEffect(() => {
     function handlePopState() {
@@ -34,6 +38,13 @@ export function AppRouter() {
       setPathname("/");
     }
   }, [pathname, session.isAuthenticated]);
+
+  useEffect(() => {
+    if (session.isAuthenticated && pathname === "/route-preview" && !previewResult) {
+      window.history.replaceState({}, "", "/");
+      setPathname("/");
+    }
+  }, [pathname, previewResult, session.isAuthenticated]);
 
   function navigate(path: string) {
     if (window.location.pathname !== path) {
@@ -71,6 +82,10 @@ export function AppRouter() {
       : "/login"
     : pathname === "/profile"
       ? "/profile"
+      : pathname === "/history"
+        ? "/history"
+      : pathname === "/route-preview"
+        ? "/route-preview"
       : "/";
 
   if (!session.isAuthenticated) {
@@ -92,6 +107,33 @@ export function AppRouter() {
         onNavigate={navigate}
         onLogout={handleLogout}
         onSave={handleProfileSave}
+      />
+    );
+  }
+
+  if (effectivePath === "/history") {
+    return (
+      <HistoryPage
+        currentPath={effectivePath}
+        profile={session.profile}
+        onNavigate={navigate}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (effectivePath === "/route-preview") {
+    if (!previewResult) {
+      return null;
+    }
+
+    return (
+      <RoutePreviewPage
+        currentPath={effectivePath}
+        profile={session.profile}
+        result={previewResult}
+        onNavigate={navigate}
+        onLogout={handleLogout}
       />
     );
   }
