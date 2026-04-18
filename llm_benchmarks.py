@@ -16,6 +16,7 @@ prompt_path3 = "./example_material/prompts/prompt_3.txt"
 prompt_path4 = "./example_material/prompts/prompt_4.txt"
 prompt_path6 = "./example_material/prompts/prompt_6.txt"
 
+DEBUG_NORMALIZATION = True
 
 ALLOWED_ACTIONS = [
     "turning", "facing", "boring", "threading", "drilling", "reaming",
@@ -30,52 +31,150 @@ ALLOWED_ACTIONS = [
 
 def validate_process_json(data: dict) -> dict:
     errors = []
+    warnings = []
+
+    if not isinstance(data, dict):
+        return {
+            "valid": False,
+            "errors": ["Input is not a dictionary"],
+            "warnings": []
+        }
 
     steps = data.get("Steps", [])
+    if not isinstance(steps, list) or not steps:
+        return {
+            "valid": False,
+            "errors": ["No steps found"],
+            "warnings": []
+        }
 
-    if not steps:
-        errors.append("No steps found")
-        return {"valid": False, "errors": errors}
-
-    actions = [str(s.get("Action", "")).lower() for s in steps]
-
-    # 1. Проверка обязательных стадий
-    required = ["rough", "finish", "inspection", "packaging"]
-    for r in required:
-        if not any(r in a for a in actions):
-            errors.append(f"Missing stage: {r}")
-
-    # 2. Проверка порядка (грубая)
-    order_map = {
-        "rough": 0,
-        "semi": 1,
-        "finish": 2,
-        "inspection": 3,
-        "packaging": 4
+    required_hard_stages = {
+        "quality-inspection",
+        "packaging",
     }
 
-    prev_order = -1
-    for a in actions:
-        for key, val in order_map.items():
-            if key in a:
-                if val < prev_order:
-                    errors.append("Invalid operation order")
-                prev_order = val
+    recommended_stages = {
+        "roughing",
+        "finishing",
+    }
 
-    # 3. Проверка соответствия equipment-action (простая эвристика)
-    for step in steps:
-        action = str(step.get("Action", "")).lower()
-        equipment = str(step.get("Equipment", "")).lower()
+    optional_stages = {
+        "semi-finishing",
+    }
 
-        if "turn" in action and "lathe" not in equipment:
-            errors.append(f"Turning without lathe: {equipment}")
+    stage_order = {
+        "roughing": 0,
+        "semi-finishing": 1,
+        "finishing": 2,
+        "quality-inspection": 3,
+        "packaging": 4,
+    }
 
-        if "mill" in action and "mill" not in equipment:
-            errors.append(f"Milling mismatch: {equipment}")
+    action_equipment_rules = {
+        "turning": ["lathe"],
+        "facing": ["lathe"],
+        "threading": ["lathe"],
+        "knurling": ["lathe"],
+        "boring": ["boring", "lathe"],
+        "drilling": ["drilling", "drill"],
+        "reaming": ["reaming", "drilling", "drill"],
+        "milling": ["milling", "machining center", "machining centre"],
+        "slotting": ["slotting", "milling", "machining center", "machining centre"],
+        "key-seating": ["key", "slotting", "milling", "machining center", "machining centre"],
+        "broaching": ["broaching"],
+        "grinding": ["grinding"],
+        "polishing": ["polishing"],
+        "deburring": ["deburring"],
+        "heat-treatment": ["heat"],
+        "quality-inspection": ["inspection", "measuring", "cmm", "coordinate"],
+        "surface-coating": ["coating"],
+        "packaging": ["packaging", "packing"],
+        "cutting-off": ["cutting", "saw", "lathe"],
+        "tapping": ["tapping", "drilling", "drill"],
+        "lapping": ["lapping"],
+        "honing": ["honing"],
+        "burnishing": ["burnishing"],
+        "electro-discharge machining (EDM)": ["edm", "electro-discharge"],
+        "laser cutting": ["laser"],
+        "waterjet cutting": ["waterjet"],
+        "assembly": ["assembly"],
+        "marking": ["marking"],
+        "non-destructive testing (NDT)": ["ndt", "inspection", "testing"],
+    }
+
+    found_stages = set()
+    prev_stage_order = -1
+
+    for idx, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            errors.append(f"Step {idx}: step is not a dictionary")
+            continue
+
+        action = str(step.get("Action", "") or "").strip()
+        stage = str(step.get("Stage", "") or "").strip()
+        equipment = step.get("Equipment", [])
+        iso_values = step.get("ISO", [])
+
+        if isinstance(equipment, list):
+            equipment_list = [str(x).strip() for x in equipment if str(x).strip()]
+            equipment_text = " ".join(equipment_list).lower()
+        else:
+            equipment_list = [str(equipment).strip()] if str(equipment).strip() else []
+            equipment_text = " ".join(equipment_list).lower()
+
+        if not action:
+            errors.append(f"Step {idx}: missing Action")
+
+        if not stage:
+            errors.append(f"Step {idx}: missing Stage")
+
+        if not equipment_list:
+            warnings.append(f"Step {idx}: missing Equipment")
+
+        if action and action not in ALLOWED_ACTIONS:
+            errors.append(f"Step {idx}: unknown Action '{action}'")
+
+        if stage:
+            found_stages.add(stage)
+
+            if stage not in stage_order:
+                errors.append(f"Step {idx}: unknown Stage '{stage}'")
+            else:
+                current_order = stage_order[stage]
+                if current_order < prev_stage_order:
+                    warnings.append(
+                        f"Step {idx}: stage order looks suspicious ('{stage}' appears after a later stage)"
+                    )
+                prev_stage_order = max(prev_stage_order, current_order)
+
+        if action in action_equipment_rules and equipment_text:
+            allowed_markers = action_equipment_rules[action]
+            if not any(marker in equipment_text for marker in allowed_markers):
+                warnings.append(
+                    f"Step {idx}: possible equipment mismatch for action '{action}' -> '{equipment_text}'"
+                )
+
+        if iso_values is None:
+            iso_values = []
+        if not isinstance(iso_values, list):
+            warnings.append(f"Step {idx}: ISO should be a list")
+
+    missing_hard = required_hard_stages - found_stages
+    for stage in sorted(missing_hard):
+        errors.append(f"Missing required stage: {stage}")
+
+    missing_recommended = recommended_stages - found_stages
+    for stage in sorted(missing_recommended):
+        warnings.append(f"Missing recommended stage: {stage}")
+
+    missing_optional = optional_stages - found_stages
+    for stage in sorted(missing_optional):
+        warnings.append(f"Missing optional stage: {stage}")
 
     return {
         "valid": len(errors) == 0,
-        "errors": errors
+        "errors": errors,
+        "warnings": warnings,
     }
 
 
@@ -83,46 +182,55 @@ def _normalize_text(s):
     return str(s or "").strip().lower()
 
 
-def _normalize_action(action):
-    raw = _normalize_text(action)
+def _normalize_action(value: Any) -> str:
+    raw = _strip_stage_words_from_action(value)
 
-    alias_map = {
-        "rough turning": "turning",
-        "finish turning": "turning",
-        "semi-finish turning": "turning",
-        "lathe turning": "turning",
-        "turn": "turning",
+    if not raw:
+        return ""
 
-        "face milling": "milling",
-        "end milling": "milling",
-
-        "inspection": "quality-inspection",
-        "quality inspection": "quality-inspection",
-        "quality control": "quality-inspection",
-
-        "ndt": "non-destructive testing (NDT)",
-        "non destructive testing": "non-destructive testing (NDT)",
-        "non-destructive testing": "non-destructive testing (NDT)",
-
-        "edm": "electro-discharge machining (EDM)",
+    action_aliases = {
+        "turning": ["turning", "turn", "turning operation"],
+        "facing": ["facing", "face machining", "face"],
+        "boring": ["boring", "bore machining", "bore"],
+        "threading": ["threading", "thread cutting", "thread"],
+        "drilling": ["drilling", "drill", "drilling operation"],
+        "reaming": ["reaming", "ream"],
+        "milling": ["milling", "mill", "milling operation"],
+        "slotting": ["slotting", "slot cutting", "slot machining"],
+        "key-seating": ["key-seating", "key seating", "keyseat", "keyway machining", "keyway cutting"],
+        "broaching": ["broaching", "broach"],
+        "heat-treatment": ["heat-treatment", "heat treatment", "tempering", "annealing", "quenching"],
+        "deburring": ["deburring", "deburr", "remove burrs", "burr removal"],
+        "sand-blasting": ["sand-blasting", "sand blasting", "blasting"],
+        "grinding": ["grinding", "grind"],
+        "polishing": ["polishing", "polish"],
+        "quality-inspection": ["quality-inspection", "quality inspection", "inspection", "quality control", "qc"],
+        "surface-coating": ["surface-coating", "surface coating", "coating"],
+        "packaging": ["packaging", "packing", "package"],
+        "cutting-off": ["cutting-off", "cutting off", "cutoff", "cut off"],
+        "knurling": ["knurling", "knurl"],
+        "tapping": ["tapping", "tap threading", "tap"],
+        "lapping": ["lapping", "lap finishing", "lap"],
+        "honing": ["honing", "hone"],
+        "burnishing": ["burnishing", "burnish"],
+        "electro-discharge machining (EDM)": [
+            "electro-discharge machining", "edm", "spark erosion"
+        ],
+        "laser cutting": ["laser cutting", "laser cut"],
+        "waterjet cutting": ["waterjet cutting", "waterjet cut"],
+        "assembly": ["assembly", "assemble"],
+        "marking": ["marking", "mark"],
+        "non-destructive testing (NDT)": [
+            "non-destructive testing", "ndt", "nondestructive testing"
+        ],
     }
 
-    if raw in alias_map:
-        return alias_map[raw]
+    for canonical, aliases in action_aliases.items():
+        for alias in aliases:
+            if alias in raw:
+                return canonical
 
-    for allowed in ALLOWED_ACTIONS:
-        if raw == allowed.lower():
-            return allowed
-
-    for alias, canonical in alias_map.items():
-        if alias in raw:
-            return canonical
-
-    for allowed in ALLOWED_ACTIONS:
-        if allowed.lower() in raw:
-            return allowed
-
-    return raw
+    return raw.strip()
 
 
 def _normalize_equipment(equipment):
@@ -149,6 +257,318 @@ def _normalize_equipment(equipment):
 
     return raw
 
+
+def _normalize_stage(value: Any) -> str:
+    raw = _normalize_text(value)
+
+    if not raw:
+        return ""
+
+    stage_aliases = [
+        ("quality-inspection", [
+            "quality-inspection", "quality inspection", "inspection",
+            "quality control", "quality-check", "quality check",
+            "qc", "final inspection", "dimensional inspection",
+            "measurement", "metrology", "final check"
+        ]),
+        ("packaging", [
+            "packaging", "packing", "package", "final packaging"
+        ]),
+        ("semi-finishing", [
+            "semi-finishing", "semi finishing", "semi-finish",
+            "semifinishing", "semifinish", "semi finish"
+        ]),
+        ("finishing", [
+            "finishing", "finish", "final machining",
+            "final pass", "finish pass", "final turning",
+            "final milling", "final grinding", "final polishing"
+        ]),
+        ("roughing", [
+            "roughing", "rough", "rough machining",
+            "rough pass", "rough turning", "rough milling",
+            "rough drilling", "initial machining", "primary machining"
+        ]),
+    ]
+
+    for canonical, aliases in stage_aliases:
+        for alias in aliases:
+            if alias in raw:
+                return canonical
+
+    return ""
+
+
+def _strip_stage_words_from_action(value: Any) -> str:
+    text = _normalize_text(value)
+
+    if not text:
+        return ""
+
+    stage_noise = [
+        "roughing", "rough machining", "rough pass", "rough",
+        "semi-finishing", "semi finishing", "semi-finish", "semifinishing", "semi finish",
+        "finishing", "finish pass", "final machining", "final pass", "finishing", "finish",
+        "quality-inspection", "quality inspection", "quality control", "quality-check", "quality check",
+        "final inspection", "inspection",
+        "packaging", "packing", "package"
+    ]
+
+    cleaned = text
+    for noise in stage_noise:
+        cleaned = cleaned.replace(noise, " ")
+
+    cleaned = " ".join(cleaned.split())
+    return cleaned
+
+
+def normalize_step(step: Dict[str, Any], step_index: int) -> Dict[str, Any]:
+    if not isinstance(step, dict):
+        return {
+            "Step number": step_index,
+            "Stage": "",
+            "Action": "",
+            "Equipment": [],
+            "ISO": [],
+        }
+
+    raw_action = step.get("Action", step.get("action", ""))
+    raw_equipment = step.get("Equipment", step.get("equipment", []))
+    raw_iso = step.get("ISO", step.get("iso", []))
+    raw_stage = step.get("Stage", step.get("stage", ""))
+
+    explicit_stage = _normalize_stage(raw_stage)
+    inferred_stage_from_action = _normalize_stage(raw_action)
+    normalized_stage = explicit_stage or inferred_stage_from_action
+
+    normalized_action = _normalize_action(raw_action)
+
+    if isinstance(raw_equipment, list):
+        equipment_list = [str(x).strip() for x in raw_equipment if str(x).strip()]
+    elif raw_equipment:
+        equipment_list = [str(raw_equipment).strip()]
+    else:
+        equipment_list = []
+
+    normalized_equipment = []
+    for eq in equipment_list:
+        norm_eq = _normalize_equipment(eq)
+        if norm_eq:
+            normalized_equipment.append(norm_eq)
+
+    dedup_equipment = []
+    seen_eq = set()
+    for eq in normalized_equipment:
+        key = eq.lower()
+        if key not in seen_eq:
+            dedup_equipment.append(eq)
+            seen_eq.add(key)
+
+    if isinstance(raw_iso, list):
+        iso_list = [str(x).strip() for x in raw_iso if str(x).strip()]
+    elif raw_iso:
+        iso_list = [str(raw_iso).strip()]
+    else:
+        iso_list = []
+
+    dedup_iso = []
+    seen_iso = set()
+    for item in iso_list:
+        key = item.lower()
+        if key not in seen_iso:
+            dedup_iso.append(item)
+            seen_iso.add(key)
+
+    step_number = step.get("Step number", step.get("step_number", step_index))
+    try:
+        step_number = int(step_number)
+    except Exception:
+        step_number = step_index
+
+    normalized_step = {
+        "Step number": step_number,
+        "Stage": normalized_stage,
+        "Action": normalized_action,
+        "Equipment": dedup_equipment,
+        "ISO": dedup_iso,
+    }
+
+    skip_keys = {"Step number", "step_number", "Stage", "stage", "Action", "action", "Equipment", "equipment", "ISO", "iso"}
+    for key, value in step.items():
+        if key not in skip_keys:
+            normalized_step[key] = value
+
+    return normalized_step
+
+
+FINISHING_ACTIONS = {
+    "grinding",
+    "polishing",
+    "lapping",
+    "honing",
+    "burnishing",
+    "surface-coating",
+    "marking",
+    "non-destructive testing (NDT)",
+}
+
+SPECIAL_STAGE_ACTIONS = {
+    "quality-inspection": "quality-inspection",
+    "packaging": "packaging",
+}
+
+MACHINING_ACTIONS = {
+    "turning",
+    "facing",
+    "boring",
+    "threading",
+    "drilling",
+    "reaming",
+    "milling",
+    "slotting",
+    "key-seating",
+    "broaching",
+    "heat-treatment",
+    "deburring",
+    "sand-blasting",
+    "cutting-off",
+    "knurling",
+    "tapping",
+    "electro-discharge machining (EDM)",
+    "laser cutting",
+    "waterjet cutting",
+    "assembly",
+}
+
+
+def repair_missing_stages(steps: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    if not isinstance(steps, list) or not steps:
+        return steps, {
+            "had_missing_stage_repairs": False,
+            "repaired_steps_count": 0,
+            "repaired_step_numbers": [],
+        }
+
+    repaired = [dict(step) if isinstance(step, dict) else {} for step in steps]
+    repaired_step_numbers = []
+
+    # 1. Жёстко выставляем стадии для специальных действий
+    for step in repaired:
+        action = str(step.get("Action", "") or "").strip()
+        stage = str(step.get("Stage", "") or "").strip()
+
+        if action in SPECIAL_STAGE_ACTIONS and stage != SPECIAL_STAGE_ACTIONS[action]:
+            step["Stage"] = SPECIAL_STAGE_ACTIONS[action]
+            repaired_step_numbers.append(step.get("Step number"))
+        elif not stage and action in FINISHING_ACTIONS:
+            step["Stage"] = "finishing"
+            repaired_step_numbers.append(step.get("Step number"))
+
+    # 2. Собираем индексы machining steps без специальных финальных стадий
+    machining_indices = []
+    for idx, step in enumerate(repaired):
+        action = str(step.get("Action", "") or "").strip()
+        stage = str(step.get("Stage", "") or "").strip()
+
+        if stage in {"quality-inspection", "packaging"}:
+            continue
+
+        if action in MACHINING_ACTIONS or action in FINISHING_ACTIONS:
+            machining_indices.append(idx)
+
+    # 3. Для шагов без Stage распределяем roughing / semi-finishing / finishing
+    if machining_indices:
+        total = len(machining_indices)
+
+        for pos, idx in enumerate(machining_indices):
+            step = repaired[idx]
+            current_stage = str(step.get("Stage", "") or "").strip()
+            action = str(step.get("Action", "") or "").strip()
+
+            if current_stage:
+                continue
+
+            assigned_stage = ""
+
+            if action in FINISHING_ACTIONS:
+                assigned_stage = "finishing"
+            elif total == 1:
+                assigned_stage = "finishing"
+            elif total == 2:
+                assigned_stage = "roughing" if pos == 0 else "finishing"
+            else:
+                if pos == 0:
+                    assigned_stage = "roughing"
+                elif pos == total - 1:
+                    assigned_stage = "finishing"
+                else:
+                    ratio = pos / (total - 1)
+                    if ratio <= 0.34:
+                        assigned_stage = "roughing"
+                    elif ratio <= 0.80:
+                        assigned_stage = "semi-finishing"
+                    else:
+                        assigned_stage = "finishing"
+
+            if assigned_stage:
+                step["Stage"] = assigned_stage
+                repaired_step_numbers.append(step.get("Step number"))
+
+    repaired_step_numbers = [x for x in repaired_step_numbers if x is not None]
+    repaired_step_numbers = list(dict.fromkeys(repaired_step_numbers))
+
+    debug_info = {
+        "had_missing_stage_repairs": len(repaired_step_numbers) > 0,
+        "repaired_steps_count": len(repaired_step_numbers),
+        "repaired_step_numbers": repaired_step_numbers,
+    }
+
+    return repaired, debug_info
+
+
+def normalize_process_json(data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {
+            "File name": "",
+            "Name of operation": "",
+            "Steps": [],
+        }
+
+    normalized = dict(data)
+
+    file_name = data.get("File name", data.get("file_name", ""))
+    operation_name = data.get("Name of operation", data.get("name_of_operation", ""))
+
+    normalized["File name"] = str(file_name).strip()
+    normalized["Name of operation"] = str(operation_name).strip()
+
+    raw_steps = _extract_steps_for_rag(data)
+    normalized_steps = []
+
+    for idx, step in enumerate(raw_steps, start=1):
+        normalized_steps.append(normalize_step(step, idx))
+
+    normalized_steps = sorted(
+        normalized_steps,
+        key=lambda x: int(x.get("Step number", 10**9))
+        if str(x.get("Step number", "")).isdigit()
+        else 10**9
+    )
+
+    for idx, step in enumerate(normalized_steps, start=1):
+        step["Step number"] = idx
+
+    normalized_steps, stage_debug = repair_missing_stages(normalized_steps)
+
+    normalized["Steps"] = normalized_steps
+
+    if DEBUG_NORMALIZATION:
+        normalized["_normalization_debug"] = {
+            **stage_debug
+        }
+
+    return normalized
+
+
 def encode_image_to_base64(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
@@ -173,6 +593,7 @@ def _clean_json_text(text: str) -> str:
 
     return cleaned.strip()
 
+
 def _get_standard_code(row: pd.Series | Dict[str, Any]) -> str:
     return str(
         row.get("ISO")
@@ -180,6 +601,7 @@ def _get_standard_code(row: pd.Series | Dict[str, Any]) -> str:
         or row.get("Standard")
         or ""
     )
+
 
 def _get_standard_title(row: pd.Series | Dict[str, Any]) -> str:
     return str(
@@ -272,9 +694,6 @@ def retrieve_relevant_data(
     return relevant_rows.to_dict(orient="records")
 
 
-
-
-
 def _format_rag_prompt(rag_rows: List[Dict[str, Any]], header: str = "") -> str:
     lines: List[str] = []
     if header:
@@ -297,11 +716,14 @@ def _format_rag_prompt(rag_rows: List[Dict[str, Any]], header: str = "") -> str:
             f"Title: {standard_title}"
         )
 
+    return "\n".join(lines)
+
 
 def _build_step_level_rag_context(
     steps: List[Dict[str, Any]],
     csv_path: str,
     max_rows_per_step: int = 5,
+    dedup_by_iso: bool = True,
 ) -> str:
     blocks: List[str] = [
         "STEP-LEVEL RAG CONTEXT (ISO candidates grouped per step):",
@@ -312,30 +734,38 @@ def _build_step_level_rag_context(
     ]
 
     for i, step in enumerate(steps, start=1):
-        action = step.get("Action", "")
-        equipment = step.get("Equipment", "")
+        action = str(step.get("Action", "") or "").strip()
+        stage = str(step.get("Stage", "") or "").strip()
+        equipment = step.get("Equipment", [])
 
-        norm_action = _normalize_action(action)
-        norm_equipment = _normalize_equipment(equipment)
+        if isinstance(equipment, list):
+            equipment_text = " ".join(str(x).strip() for x in equipment if str(x).strip())
+        else:
+            equipment_text = str(equipment).strip()
 
         query_parts = []
-        if norm_action:
-            query_parts.append(f"operation {norm_action}")
-        if norm_equipment:
-            query_parts.append(f"equipment {norm_equipment}")
+
+        if action:
+            query_parts.append(f"operation {action}")
+
+        if stage:
+            query_parts.append(f"stage {stage}")
+
+        if equipment_text:
+            query_parts.append(f"equipment {equipment_text}")
 
         query = ". ".join(query_parts).strip()
         if not query:
             query = "machining operation equipment"
 
         rows = retrieve_relevant_data(
-            query=query,
+            query_text=query,
             csv_path=csv_path,
-            top_n=top_n,
-            dedup_by_iso=dedup_by_iso
+            top_k=max_rows_per_step,
+            dedup_by_iso=dedup_by_iso,
         )
 
-        if rows and norm_action:
+        if rows and action:
             filtered_rows = []
             for item in rows:
                 row_text = " ".join([
@@ -344,9 +774,10 @@ def _build_step_level_rag_context(
                     str(item.get("Operation category", "")),
                     str(item.get("Process stage", "")),
                     str(item.get("Name of GOST", "")),
+                    str(item.get("Name of ISO", "")),
                 ]).lower()
 
-                if norm_action.lower() in row_text:
+                if action.lower() in row_text:
                     filtered_rows.append(item)
 
             if filtered_rows:
@@ -359,7 +790,7 @@ def _build_step_level_rag_context(
             standard_title = _get_standard_title(item)
             blocks.append(
                 f"- ISO: {standard_code}; "
-                f"Equipment: {item.get('Equipment category','')}; "
+                f"Equipment: {item.get('Equipment category', '')}; "
                 f"Title: {standard_title}"
             )
 
@@ -542,7 +973,12 @@ def save_jsons(json_pkl_paths, json_collages_paths):
         out_dir = json_collages_paths[i]
         os.makedirs(out_dir, exist_ok=True)
 
-        raw_map = pickle.load(open(pkl_path, "rb"))
+        with open(pkl_path, "rb") as f:
+            raw_map = pickle.load(f)
+
+        if not isinstance(raw_map, dict):
+            print(f"[save_jsons] Skip {pkl_path}: expected dict, got {type(raw_map)}")
+            continue
 
         for key, value in raw_map.items():
             if value is None:
@@ -556,9 +992,33 @@ def save_jsons(json_pkl_paths, json_collages_paths):
                     f.write(str(value))
                 print(f"[save_jsons] JSON parse failed for {key}. Saved raw to {debug_path}")
                 continue
-            if parsed:
-                validation = validate_process_json(parsed)
-                parsed["_validation"] = validation
+
+            try:
+                parsed = normalize_process_json(parsed)
+            except Exception as e:
+                debug_path = os.path.join(out_dir, f"{key}.normalize_error.txt")
+                with open(debug_path, "w", encoding="utf-8") as f:
+                    f.write(str(value))
+                print(f"[save_jsons] Normalize failed for {key}: {e}. Saved raw to {debug_path}")
+                continue
+
+            if not parsed.get("File name"):
+                parsed["File name"] = f"{key}.jpg"
+
+            if not parsed.get("Name of operation"):
+                parsed["Name of operation"] = "Manufacturing Process"
+
+            validation = validate_process_json(parsed)
+            if DEBUG_NORMALIZATION:
+                if "_normalization_debug" not in parsed:
+                    parsed["_normalization_debug"] = {}
+
+                parsed["_normalization_debug"]["validator_valid"] = validation.get("valid", False)
+                parsed["_normalization_debug"]["validator_errors_count"] = len(validation.get("errors", []))
+                parsed["_normalization_debug"]["validator_warnings_count"] = len(validation.get("warnings", []))
+                parsed["_normalization_debug"]["validator_errors"] = validation.get("errors", [])
+                parsed["_normalization_debug"]["validator_warnings"] = validation.get("warnings", [])
+            parsed["_validation"] = validation
 
             output_path = os.path.join(out_dir, f"{key}.json")
             with open(output_path, "w", encoding="utf-8") as f:
