@@ -85,7 +85,7 @@ export function AuthPage({ mode, onLogin, onRegister, onNavigate }: AuthPageProp
               </label>
 
               <button type="submit" className={styles.primaryButton}>
-                Войти на главную
+                Войти
               </button>
             </form>
           ) : (

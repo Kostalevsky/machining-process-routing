@@ -150,7 +150,7 @@
 
 .pageInner {
   position: absolute;
-  inset: 18px;
+  inset: 13px;
   border: 1px solid rgba(80, 80, 80, 0.45);
 }
 
@@ -246,6 +246,9 @@
 }
 
 .documentTitle {
+  position: absolute;
+  left: 24%;
+  top: 92px;
   font-size: 24px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -253,7 +256,7 @@
 }
 
 .documentSubtitle {
-  margin-top: 10px;
+  margin-top: 90px;
   font-size: 18px;
   font-weight: 700;
   color: #4e4e4e;

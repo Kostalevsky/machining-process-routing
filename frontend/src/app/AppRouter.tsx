@@ -15,12 +15,16 @@ import {
 
 export function AppRouter() {
   const [pathname, setPathname] = useState(window.location.pathname || "/");
+  const [navigationState, setNavigationState] = useState<Record<string, unknown> | null>(
+    (window.history.state as Record<string, unknown> | null) ?? null
+  );
   const [session, setSession] = useState(getSessionState);
   const previewResult = pathname === "/route-preview" ? getCurrentMockResult() : null;
 
   useEffect(() => {
     function handlePopState() {
       setPathname(window.location.pathname || "/");
+      setNavigationState((window.history.state as Record<string, unknown> | null) ?? null);
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -46,11 +50,14 @@ export function AppRouter() {
     }
   }, [pathname, previewResult, session.isAuthenticated]);
 
-  function navigate(path: string) {
+  function navigate(path: string, state?: Record<string, unknown>) {
     if (window.location.pathname !== path) {
-      window.history.pushState({}, "", path);
+      window.history.pushState(state ?? {}, "", path);
+    } else if (state) {
+      window.history.replaceState(state, "", path);
     }
     setPathname(path);
+    setNavigationState(state ?? null);
   }
 
   function handleLogin(email: string) {
@@ -132,6 +139,7 @@ export function AppRouter() {
         currentPath={effectivePath}
         profile={session.profile}
         result={previewResult}
+        showBackButton={navigationState?.from === "history"}
         onNavigate={navigate}
         onLogout={handleLogout}
       />

@@ -12,7 +12,7 @@ import styles from "./HistoryPage.module.scss";
 type HistoryPageProps = {
   currentPath: string;
   profile: UserProfile;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, state?: Record<string, unknown>) => void;
   onLogout: () => void;
 };
 
@@ -32,7 +32,7 @@ export function HistoryPage({ currentPath, profile, onNavigate, onLogout }: Hist
 
   function handleOpenPreview(item: (typeof items)[number]) {
     openHistoryPreview(item);
-    onNavigate("/route-preview");
+    onNavigate("/route-preview", { from: "history" });
   }
 
   return (

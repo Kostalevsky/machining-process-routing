@@ -133,16 +133,12 @@ function buildCoverPage(routeSheet: RouteSheet) {
     line(rightX, topY + rowHeight, innerX + innerW, topY + rowHeight),
     line(rightX, topY + rowHeight * 2, innerX + innerW, topY + rowHeight * 2),
       text(innerX + 42, topY + rowHeight * 2 + 9, "Lit.", "F1", 11),
-      text(innerX + 30, topY + rowHeight + 9, "Weight", "F1", 11),
       text(innerX + 24, topY + 9, "Scale", "F1", 11),
-      centeredText(PAGE_WIDTH, halfTop + 14, 'OKB "EYTEP"', "F2", 14),
       centeredText(PAGE_WIDTH, topY + 16, truncateMiddle(routeSheet["File name"].replace(/\.[^.]+$/, ""), 30), "F2", 18),
       text(rightX + 42, topY + rowHeight * 2 + 9, "14", "F2", 12),
       text(rightX + 48, topY + 9, "1", "F2", 12),
-      text(innerX + 22, innerY + 300, "APPROVED", "F2", 16),
       centeredText(PAGE_WIDTH, innerY + 225, "DOCUMENT PACKAGE", "F2", 24),
       centeredText(PAGE_WIDTH, innerY + 190, "for the manufacturing process of the part", "F2", 18),
-      centeredText(PAGE_WIDTH, innerY + 150, routeSheet["Name of operation"], "F1", 16),
     );
 
   commands.push(...drawBottomStamp("TL", "Title page", truncateMiddle(routeSheet["File name"], 24), "Sheet 1", frame));
@@ -183,9 +179,11 @@ function buildStepsPages(routeSheet: RouteSheet) {
   const headerHeight = 54;
   const tableTop = topY - headerHeight;
   const pageTitleBottom = topY;
-  const stepAreaHeight = tableTop - bottomY;
-  const rowHeight = 24;
-  const rowsPerPage = Math.max(1, Math.floor((stepAreaHeight - 40) / rowHeight) - 1);
+  const columnHeaderHeight = 30;
+  const bodyTop = tableTop - columnHeaderHeight;
+  const stepAreaHeight = bodyTop - bottomY;
+  const rowHeight = 28;
+  const rowsPerPage = Math.max(1, Math.floor((stepAreaHeight - 12) / rowHeight) - 1);
   const chunks: typeof routeSheet.Steps[] = [];
 
   for (let index = 0; index < routeSheet.Steps.length; index += rowsPerPage) {
@@ -203,6 +201,7 @@ function buildStepsPages(routeSheet: RouteSheet) {
 
     commands.push(
       line(innerX, tableTop, innerX + innerW, tableTop),
+      line(innerX, bodyTop, innerX + innerW, bodyTop),
       line(x1, bottomY, x1, pageTitleBottom),
       line(x2, bottomY, x2, pageTitleBottom),
       line(x3, bottomY, x3, pageTitleBottom),
@@ -210,13 +209,13 @@ function buildStepsPages(routeSheet: RouteSheet) {
       text(innerX + 18, topY - 48, "Route sheet", "F2", 14),
       text(innerX + innerW / 2 + 16, topY - 32, "Part", "F1", 12),
       text(innerX + innerW / 2 + 16, topY - 48, truncateMiddle(routeSheet["File name"].replace(/\.[^.]+$/, ""), 28), "F2", 14),
-      text(innerX + 26, tableTop - 18, "Step", "F2", 11),
-      text(x1 + 18, tableTop - 18, "Action", "F2", 11),
-      text(x2 + 18, tableTop - 18, "Equipment", "F2", 11),
-      text(x3 + 18, tableTop - 18, "ISO", "F2", 11),
+      text(innerX + 26, bodyTop + 9, "Step", "F2", 11),
+      text(x1 + 18, bodyTop + 9, "Action", "F2", 11),
+      text(x2 + 18, bodyTop + 9, "Equipment", "F2", 11),
+      text(x3 + 18, bodyTop + 9, "ISO", "F2", 11),
     );
 
-    let currentY = tableTop - rowHeight;
+    let currentY = bodyTop - rowHeight;
     chunk.forEach((step) => {
       commands.push(line(innerX, currentY, innerX + innerW, currentY));
 

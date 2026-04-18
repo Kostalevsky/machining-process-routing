@@ -10,11 +10,19 @@ type RoutePreviewPageProps = {
   currentPath: string;
   profile: UserProfile;
   result: MockProcessResult;
-  onNavigate: (path: string) => void;
+  showBackButton?: boolean;
+  onNavigate: (path: string, state?: Record<string, unknown>) => void;
   onLogout: () => void;
 };
 
-export function RoutePreviewPage({ currentPath, profile, result, onNavigate, onLogout }: RoutePreviewPageProps) {
+export function RoutePreviewPage({
+  currentPath,
+  profile,
+  result,
+  showBackButton = false,
+  onNavigate,
+  onLogout,
+}: RoutePreviewPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const jsonString = useMemo(() => JSON.stringify(result.routeSheet, null, 2), [result.routeSheet]);
@@ -67,6 +75,11 @@ export function RoutePreviewPage({ currentPath, profile, result, onNavigate, onL
       <main className={styles.main}>
         <section className={styles.toolbar}>
           <div className={styles.toolbarActions}>
+            {showBackButton ? (
+              <button type="button" className={styles.secondaryButton} onClick={() => onNavigate("/history")}>
+                Назад
+              </button>
+            ) : null}
             <button type="button" className={styles.secondaryButton} onClick={() => onNavigate("/")}>
               Загрузить другую модель
             </button>
@@ -95,11 +108,9 @@ export function RoutePreviewPage({ currentPath, profile, result, onNavigate, onL
                       <div className={styles.topStamp}>
                         <div className={styles.topStampLeft}>
                           <span>Лит.</span>
-                          <span>Масса</span>
                           <span>Масштаб</span>
                         </div>
                         <div className={styles.topStampCenter}>
-                          <div className={styles.topStampCode}>ОКБ "ЭЙТЕП"</div>
                           <div className={styles.topStampName} title={productName}>
                             {truncateFileName(productName, 28)}
                           </div>
@@ -111,10 +122,8 @@ export function RoutePreviewPage({ currentPath, profile, result, onNavigate, onL
                       </div>
 
                       <div className={styles.pageCenter}>
-                        <div className={styles.approvedText}>СОГЛАСОВАНО</div>
                         <div className={styles.documentTitle}>КОМПЛЕКТ ДОКУМЕНТОВ</div>
                         <div className={styles.documentSubtitle}>технологического процесса изготовления изделия</div>
-                        <div className={styles.documentOperation}>{result.routeSheet["Name of operation"]}</div>
                       </div>
 
                       <div className={styles.bottomStamp}>
