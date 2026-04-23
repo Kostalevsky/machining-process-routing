@@ -18,7 +18,7 @@ prompt_path6 = "./example_material/prompts/prompt_6.txt"
 
 DEBUG_NORMALIZATION = True
 
-ALLOWED_ACTIONS = [
+ALLOWED_ACTIONS = {
     "turning", "facing", "boring", "threading", "drilling", "reaming",
     "milling", "slotting", "key-seating", "broaching", "heat-treatment",
     "deburring", "sand-blasting", "grinding", "polishing",
@@ -26,7 +26,7 @@ ALLOWED_ACTIONS = [
     "knurling", "tapping", "lapping", "honing", "burnishing",
     "electro-discharge machining (EDM)", "laser cutting", "waterjet cutting",
     "assembly", "marking", "non-destructive testing (NDT)"
-]
+}
 
 
 def validate_process_json(data: dict) -> dict:
@@ -226,7 +226,7 @@ def _normalize_action(value: Any) -> str:
     }
 
     for canonical, aliases in action_aliases.items():
-        for alias in aliases:
+        for alias in sorted(aliases, key=len, reverse=True):
             if alias in raw:
                 return canonical
 
@@ -244,12 +244,35 @@ def _normalize_equipment(equipment):
         "cnc lathe machine": "cnc lathe",
         "turning center": "cnc lathe",
         "turning centre": "cnc lathe",
+        "cnc turning center": "cnc lathe",
+        "cnc turning centre": "cnc lathe",
 
         "milling machine": "milling machine",
         "cnc milling machine": "cnc milling machine",
+        "machining center": "machining center",
+        "machining centre": "machining center",
+        "cnc machining center": "machining center",
+        "cnc machining centre": "machining center",
 
         "drill press": "drilling machine",
+        "drill press machine": "drilling machine",
+        "drilling machine": "drilling machine",
+
+        "coordinate measuring machine": "cmm",
+        "coordinate measuring machine (cmm)": "cmm",
+        "cmm": "cmm",
+
         "inspection station": "inspection equipment",
+        "inspection equipment": "inspection equipment",
+
+        "heat treatment furnace": "heat treatment furnace",
+        "heat-treatment furnace": "heat treatment furnace",
+
+        "grinding machine": "grinding machine",
+        "polishing machine": "polishing machine",
+        "deburring machine": "deburring machine",
+        "packaging machine": "packaging machine",
+        "coating machine": "coating machine",
     }
 
     if raw in equipment_aliases:
@@ -765,7 +788,7 @@ def _build_step_level_rag_context(
             dedup_by_iso=dedup_by_iso,
         )
 
-        if rows and action:
+        if rows:
             filtered_rows = []
             for item in rows:
                 row_text = " ".join([
@@ -777,7 +800,10 @@ def _build_step_level_rag_context(
                     str(item.get("Name of ISO", "")),
                 ]).lower()
 
-                if action.lower() in row_text:
+                action_ok = action.lower() in row_text if action else True
+                stage_ok = stage.lower() in row_text if stage else True
+
+                if action_ok and stage_ok:
                     filtered_rows.append(item)
 
             if filtered_rows:
@@ -785,6 +811,11 @@ def _build_step_level_rag_context(
 
         blocks.append(f"\nSTEP {i} QUERY:\n{query}")
         blocks.append("ISO CANDIDATES:")
+
+        if not rows:
+            blocks.append("- No candidates found")
+            continue
+
         for item in rows:
             standard_code = _get_standard_code(item)
             standard_title = _get_standard_title(item)
@@ -831,6 +862,8 @@ def generate_response_from_image_mistral(image_path, prompt, api_key, data_type)
         draft_text = _call(draft_prompt)
 
         draft_json = _safe_json_loads(draft_text)
+        if draft_json:
+            draft_json = normalize_process_json(draft_json)
         steps = _extract_steps_for_rag(draft_json) if draft_json else []
 
         if steps:
@@ -889,6 +922,8 @@ def generate_response_from_image_qwen(image_path, model_name, prompt, my_api_key
         draft_text = _call(draft_prompt)
 
         draft_json = _safe_json_loads(draft_text)
+        if draft_json:
+            draft_json = normalize_process_json(draft_json)
         steps = _extract_steps_for_rag(draft_json) if draft_json else []
 
         if steps:
