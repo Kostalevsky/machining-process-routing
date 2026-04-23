@@ -6,10 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base_class import Base
 from app.models.enums import GenerationStatus
 from app.models.mixins import TimestampMixin
-
-
-def _enum_values(enum_cls) -> list[str]:
-    return [item.value for item in enum_cls]
+from app.models.utils import enum_values
 
 
 class Generation(TimestampMixin, Base):
@@ -38,7 +35,7 @@ class Generation(TimestampMixin, Base):
     model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[GenerationStatus] = mapped_column(
-        Enum(GenerationStatus, name="generation_status", values_callable=_enum_values),
+        Enum(GenerationStatus, name="generation_status", values_callable=enum_values),
         default=GenerationStatus.PENDING,
         nullable=False,
     )

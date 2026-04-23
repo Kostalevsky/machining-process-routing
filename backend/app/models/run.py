@@ -4,10 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base_class import Base
 from app.models.enums import RunStatus
 from app.models.mixins import TimestampMixin
-
-
-def _enum_values(enum_cls) -> list[str]:
-    return [item.value for item in enum_cls]
+from app.models.utils import enum_values
 
 
 def _artifact_run_foreign_keys():
@@ -31,7 +28,7 @@ class Run(TimestampMixin, Base):
     )
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[RunStatus] = mapped_column(
-        Enum(RunStatus, name="run_status", values_callable=_enum_values),
+        Enum(RunStatus, name="run_status", values_callable=enum_values),
         default=RunStatus.CREATED,
         nullable=False,
     )

@@ -9,14 +9,14 @@ import argparse
 import json
 import math
 import os
+import pickle
 import random
+import shutil
 import sys
 
 import bpy
 from mathutils import Vector
 from mathutils.noise import random_unit_vector
-import pickle
-import shutil
 
 MAX_DEPTH = 5.0
 FORMAT_VERSION = 6
@@ -36,14 +36,20 @@ DEFAULT_DELETE_MATERIAL = False
 
 def get_raw_script_args(argv):
     if "--" not in argv:
-        raise SystemExit("Missing '--'. Use: blender -b -P render_script_type2.py -- <script args>")
+        raise SystemExit(
+            "Missing '--'. Use: blender -b -P blender_render_script.py -- <script args>"
+        )
     return argv[argv.index("--") + 1 :]
 
 
 def parse_args(raw_args):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--object_path_pkl', type=str, default='./example_material/example_object_path.pkl')
-    parser.add_argument('--parent_dir', type=str, default='./example_material')
+    parser.add_argument(
+        "--object_path_pkl",
+        type=str,
+        default="./example_material/example_object_path.pkl",
+    )
+    parser.add_argument("--parent_dir", type=str, default="./example_material")
     parser.add_argument("--num_images", type=int, default=20)
     parser.add_argument("--backend", type=str, default="BLENDER_EEVEE")
     parser.add_argument("--light_mode", type=str, default="uniform")
@@ -69,18 +75,49 @@ def parse_args(raw_args):
 
 def build_render_options(args):
     options = {
-        "num_images": args.num_images if isinstance(args.num_images, int) and args.num_images > 0 else DEFAULT_NUM_IMAGES,
-        "light_mode": args.light_mode if args.light_mode in ["random", "uniform", "camera", "basic"] else DEFAULT_LIGHT_MODE,
-        "camera_pose": args.camera_pose if args.camera_pose in ["random", "z-circular", "z-circular-elevated"] else DEFAULT_CAMERA_POSE,
-        "camera_dist_min": args.camera_dist_min if args.camera_dist_min > 0 else DEFAULT_CAMERA_DIST_MIN,
-        "camera_dist_max": args.camera_dist_max if args.camera_dist_max > 0 else DEFAULT_CAMERA_DIST_MAX,
+        "num_images": (
+            args.num_images
+            if isinstance(args.num_images, int) and args.num_images > 0
+            else DEFAULT_NUM_IMAGES
+        ),
+        "light_mode": (
+            args.light_mode
+            if args.light_mode in ["random", "uniform", "camera", "basic"]
+            else DEFAULT_LIGHT_MODE
+        ),
+        "camera_pose": (
+            args.camera_pose
+            if args.camera_pose in ["random", "z-circular", "z-circular-elevated"]
+            else DEFAULT_CAMERA_POSE
+        ),
+        "camera_dist_min": (
+            args.camera_dist_min
+            if args.camera_dist_min > 0
+            else DEFAULT_CAMERA_DIST_MIN
+        ),
+        "camera_dist_max": (
+            args.camera_dist_max
+            if args.camera_dist_max > 0
+            else DEFAULT_CAMERA_DIST_MAX
+        ),
         "fast_mode": args.fast_mode if isinstance(args.fast_mode, bool) else DEFAULT_FAST_MODE,
-        "extract_material": args.extract_material if isinstance(args.extract_material, bool) else DEFAULT_EXTRACT_MATERIAL,
-        "delete_material": args.delete_material if isinstance(args.delete_material, bool) else DEFAULT_DELETE_MATERIAL,
+        "extract_material": (
+            args.extract_material
+            if isinstance(args.extract_material, bool)
+            else DEFAULT_EXTRACT_MATERIAL
+        ),
+        "delete_material": (
+            args.delete_material
+            if isinstance(args.delete_material, bool)
+            else DEFAULT_DELETE_MATERIAL
+        ),
     }
 
     if options["camera_dist_min"] > options["camera_dist_max"]:
-        options["camera_dist_min"], options["camera_dist_max"] = options["camera_dist_max"], options["camera_dist_min"]
+        options["camera_dist_min"], options["camera_dist_max"] = (
+            options["camera_dist_max"],
+            options["camera_dist_min"],
+        )
 
     if options["light_mode"] == "basic" and options["extract_material"]:
         options["extract_material"] = False
@@ -140,8 +177,8 @@ def scene_bbox(single_obj=None, ignore_matrix=False):
             coord = Vector(coord)
             if not ignore_matrix:
                 coord = obj.matrix_world @ coord
-            bbox_min = tuple(min(x, y) for x, y in zip(bbox_min, coord))
-            bbox_max = tuple(max(x, y) for x, y in zip(bbox_max, coord))
+            bbox_min = tuple(min(x, y) for x, y in zip(bbox_min, coord, strict=True))
+            bbox_max = tuple(max(x, y) for x, y in zip(bbox_max, coord, strict=True))
     if not found:
         raise RuntimeError("no objects in scene to compute bounding box for")
     return Vector(bbox_min), Vector(bbox_max)
@@ -544,7 +581,8 @@ def setup_nodes(output_path, capturing_material_alpha: bool = False, basic_light
                 if hasattr(combine_node, "mode"):
                     combine_node.mode = "RGB"
                 for i in range(3):
-                    tree.links.new(node_mul(rgba_node.outputs[i], brightness), combine_node.inputs[i])
+                    shaded_output = node_mul(rgba_node.outputs[i], brightness)
+                    tree.links.new(shaded_output, combine_node.inputs[i])
                 if len(rgba_node.outputs) > 3 and len(combine_node.inputs) > 3:
                     tree.links.new(rgba_node.outputs[3], combine_node.inputs[3])
                 raw_color_socket = combine_node.outputs[0]
@@ -815,7 +853,8 @@ def render_script_type2():
             print('object not exist, check the file path')
             continue
 
-        cur_output_path = os.path.join(args.parent_dir, 'rendered_imgs/%s'%(uid.split('/')[-1].split('.')[0]))
+        uid_name = os.path.basename(uid).split(".")[0]
+        cur_output_path = os.path.join(args.parent_dir, f"rendered_imgs/{uid_name}")
         save_rendering_dataset(
             input_path=uid,
             output_path=cur_output_path,

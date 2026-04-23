@@ -28,6 +28,10 @@ class S3Storage:
             ExtraArgs={"ContentType": content_type},
         )
 
+    def download_bytes(self, object_key: str) -> bytes:
+        response = self._client.get_object(Bucket=self.bucket, Key=object_key)
+        return response["Body"].read()
+
     def generate_presigned_url(self, object_key: str) -> str:
         presigned_url = self._client.generate_presigned_url(
             "get_object",
@@ -35,6 +39,10 @@ class S3Storage:
             ExpiresIn=settings.s3_presign_expire_seconds,
         )
         return _replace_base_url(presigned_url, settings.s3_public_endpoint_url)
+
+
+def get_storage() -> S3Storage:
+    return S3Storage()
 
 
 def _replace_base_url(url: str, public_base_url: str) -> str:

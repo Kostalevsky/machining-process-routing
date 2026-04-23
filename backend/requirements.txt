@@ -13,3 +13,6 @@ pytest
 httpx
 ruff
 pre-commit
+numpy
+Pillow
+scikit-learn

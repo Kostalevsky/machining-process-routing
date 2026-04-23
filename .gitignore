@@ -1,3 +1,9 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -11,38 +17,39 @@ __pycache__/
 venv/
 env/
 
-# Tool caches
+# Local environment files
+.env
+.env.*
+!/backend/.env.example
+/backend/.env
+
+# Tool caches and reports
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
-
-# Jupyter
 .ipynb_checkpoints/
-
-# OS / Editor
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
 
 # Runtime logs
 *.log
-backend/e2e-results/
+
+# Markdown notes and generated docs
+*.md
+
+# Backend-generated artifacts
+/backend/e2e-results/
 
 # Local exports / temp data
-example_object_path.txt
-promt.md
-answer.md
-project.md
+/example_object_path.txt
+/example_material/example_object_path.txt
 
 # Generated pipeline outputs
-example_material/rendered_imgs/
-example_material/collages_3/
-example_material/collages_4/
-example_material/collages_6/
-results_no_rag/
-results_rag/
-metrics/
+/example_material/rendered_imgs/
+/example_material/collages_3/
+/example_material/collages_4/
+/example_material/collages_6/
+/results_no_rag/
+/results_rag/
+/metrics/

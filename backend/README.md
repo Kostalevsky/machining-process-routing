@@ -8,6 +8,7 @@
 - Alembic;
 - PostgreSQL.
 - MinIO(S3-compatible storage).
+- Blender inside API container for OBJ rendering.
 
 `run` трактуется как сессия пользователя над одной CAD-моделью.
 
@@ -37,6 +38,12 @@ alembic upgrade head
 То есть при первом запуске схема БД создастся автоматически из миграций.
 
 `docker compose` также поднимает MinIO и автоматически создаёт bucket для артефактов.
+
+Для `POST /api/v1/runs/{run_id}/process` backend использует встроенный Blender-скрипт
+`backend/app/modules/processing/blender_render_script.py`. Дополнительные файлы из корня
+репозитория для контейнерного рендера не нужны.
+
+Архитектурная карта backend: `backend/ARCHITECTURE.md`.
 
 ## Базовые Ручки MVP
 

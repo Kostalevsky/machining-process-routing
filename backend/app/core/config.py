@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -18,6 +22,14 @@ class Settings(BaseSettings):
     s3_bucket: str = "machining-process-routing"
     s3_region: str = "us-east-1"
     s3_presign_expire_seconds: int = 3600
+    blender_binary: str = "blender"
+    blender_render_script_path: str = "app/modules/processing/blender_render_script.py"
+    render_num_images: int = 6
+    render_light_mode: str = "uniform"
+    render_camera_pose: str = "z-circular-elevated"
+    render_camera_dist_min: float = 2.0
+    render_camera_dist_max: float = 2.0
+    render_timeout_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=".env",

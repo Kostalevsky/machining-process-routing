@@ -18,6 +18,10 @@ BASE_URL = os.environ.get("E2E_BASE_URL", "http://localhost:8000")
 API_PREFIX = "/api/v1"
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "e2e-results"
 TMP_DIR = RESULTS_DIR / "tmp"
+REAL_SOURCE_OBJ = (
+    Path(__file__).resolve().parents[2]
+    / "abc_dataset/00009490/00009490_48f21d6478e64f7d8eea685f_trimesh_001.obj"
+)
 
 
 @dataclass
@@ -36,6 +40,9 @@ class Context:
     user_email: str | None = None
     run_id: int | None = None
     empty_run_id: int | None = None
+    collage_artifact_ids_by_size: dict[int, int] | None = None
+    selected_collage_artifact_id: int | None = None
+    generation_id: int | None = None
 
 
 class E2ERunner:
@@ -73,8 +80,21 @@ class E2ERunner:
             ("upload_rejects_empty_file", self.case_upload_rejects_empty_file),
             ("upload_source_success", self.case_upload_source_success),
             ("upload_source_twice_fails", self.case_upload_source_twice_fails),
+            (
+                "generate_collage_without_renders_fails",
+                self.case_generate_collage_without_renders_fails,
+            ),
+            ("generation_without_collage_fails", self.case_generation_without_collage_fails),
             ("process_success", self.case_process_success),
             ("process_twice_fails", self.case_process_twice_fails),
+            ("generate_collages_success", self.case_generate_collages_success),
+            ("select_missing_collage_fails", self.case_select_missing_collage_fails),
+            ("select_collage_success", self.case_select_collage_success),
+            ("create_generation_success", self.case_create_generation_success),
+            (
+                "create_generation_second_time_success",
+                self.case_create_generation_second_time_success,
+            ),
             ("get_run_after_process", self.case_get_run_after_process),
         ]
 
@@ -255,6 +275,117 @@ class E2ERunner:
         self._expect_json_path(response.body_json, ["status"], "created")
         return "main run returned before upload"
 
+    def case_generate_collage_without_renders_fails(self) -> str:
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/collages/generate",
+            json_body={"counts": [3], "selected_count": 3},
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 409)
+        return "collage generation is blocked without render images"
+
+    def case_generation_without_collage_fails(self) -> str:
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/generations",
+            json_body={"provider": "stub", "model_name": "mock-generator", "prompt_version": "v1"},
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 409)
+        return "generation is blocked until a collage is selected"
+
+    def case_generate_collages_success(self) -> str:
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/collages/generate",
+            json_body={"counts": [3, 4, 6], "selected_count": 4},
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 201)
+        self._expect_json_path(response.body_json, ["status"], "collages_ready")
+        collage_artifacts = [
+            artifact
+            for artifact in response.body_json["artifacts"]
+            if artifact["type"] == "collage"
+        ]
+        collage_ids = {
+            artifact["meta_json"]["collage_size"]: artifact["id"] for artifact in collage_artifacts
+        }
+        for size in [3, 4, 6]:
+            if size not in collage_ids:
+                raise AssertionError(f"collage size {size} was not created")
+        self.context.collage_artifact_ids_by_size = collage_ids
+        self.context.selected_collage_artifact_id = response.body_json[
+            "selected_collage_artifact_id"
+        ]
+        if self.context.selected_collage_artifact_id != collage_ids[4]:
+            raise AssertionError("selected collage was not set to the requested size 4")
+        return f"generated collages with artifact ids {collage_ids}"
+
+    def case_select_missing_collage_fails(self) -> str:
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/collages/select",
+            json_body={"collage_artifact_id": 999999},
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 404)
+        return "missing collage selection rejected"
+
+    def case_select_collage_success(self) -> str:
+        collage_artifact_id = self.context.collage_artifact_ids_by_size[6]
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/collages/select",
+            json_body={"collage_artifact_id": collage_artifact_id},
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 200)
+        self._expect_json_path(
+            response.body_json,
+            ["selected_collage_artifact_id"],
+            collage_artifact_id,
+        )
+        self.context.selected_collage_artifact_id = collage_artifact_id
+        return f"selected collage artifact_id={collage_artifact_id}"
+
+    def case_create_generation_success(self) -> str:
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/generations",
+            json_body={"provider": "stub", "model_name": "mock-generator", "prompt_version": "v1"},
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 201)
+        self._expect_json_path(response.body_json, ["status"], "completed")
+        generations = response.body_json["generations"]
+        if not generations:
+            raise AssertionError("generation list is empty after generation request")
+        latest_generation = generations[0]
+        self.context.generation_id = latest_generation["id"]
+        if latest_generation["status"] != "succeeded":
+            raise AssertionError("latest generation did not succeed")
+        if response.body_json["latest_generation_id"] != self.context.generation_id:
+            raise AssertionError("run.latest_generation_id was not updated")
+        return f"created generation_id={self.context.generation_id}"
+
+    def case_create_generation_second_time_success(self) -> str:
+        response = self._request(
+            "POST",
+            f"{API_PREFIX}/runs/{self.context.run_id}/generations",
+            json_body={
+                "provider": "stub",
+                "model_name": "mock-generator-v2",
+                "prompt_version": "v2",
+            },
+            token=self.context.access_token,
+        )
+        self._expect_status(response, 201)
+        if len(response.body_json["generations"]) < 2:
+            raise AssertionError("expected a second generation record")
+        return "second generation request also produced a new generation record"
+
     def case_upload_requires_obj_extension(self) -> str:
         txt_path = TMP_DIR / "invalid-upload.txt"
         txt_path.write_text("not-an-obj", encoding="utf-8")
@@ -262,7 +393,7 @@ class E2ERunner:
             "POST",
             f"{API_PREFIX}/runs/{self.context.run_id}/source-file",
             token=self.context.access_token,
-            files={"file": txt_path},
+            files=[("file", txt_path)],
         )
         self._expect_status(response, 400)
         return "non-.obj file rejected"
@@ -274,22 +405,17 @@ class E2ERunner:
             "POST",
             f"{API_PREFIX}/runs/{self.context.run_id}/source-file",
             token=self.context.access_token,
-            files={"file": empty_obj},
+            files=[("file", empty_obj)],
         )
         self._expect_status(response, 400)
         return "empty .obj file rejected"
 
     def case_upload_source_success(self) -> str:
-        obj_path = TMP_DIR / "smoke-model.obj"
-        obj_path.write_text(
-            "o TestModel\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3\n",
-            encoding="utf-8",
-        )
         response = self._request(
             "POST",
             f"{API_PREFIX}/runs/{self.context.run_id}/source-file",
             token=self.context.access_token,
-            files={"file": obj_path},
+            files=[("file", REAL_SOURCE_OBJ)],
         )
         self._expect_status(response, 200)
         self._expect_json_path(response.body_json, ["status"], "source_uploaded")
@@ -297,16 +423,11 @@ class E2ERunner:
         return f"uploaded source artifact_id={response.body_json['source_artifact_id']}"
 
     def case_upload_source_twice_fails(self) -> str:
-        obj_path = TMP_DIR / "second.obj"
-        obj_path.write_text(
-            "o TestModel\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3\n",
-            encoding="utf-8",
-        )
         response = self._request(
             "POST",
             f"{API_PREFIX}/runs/{self.context.run_id}/source-file",
             token=self.context.access_token,
-            files={"file": obj_path},
+            files=[("file", REAL_SOURCE_OBJ)],
         )
         self._expect_status(response, 409)
         return "second source upload rejected"
@@ -318,11 +439,19 @@ class E2ERunner:
             token=self.context.access_token,
         )
         self._expect_status(response, 202)
-        self._expect_json_path(response.body_json, ["status"], "rendering")
+        self._expect_json_path(response.body_json, ["status"], "rendered")
+        render_artifacts = [
+            artifact
+            for artifact in response.body_json["artifacts"]
+            if artifact["type"] == "render"
+        ]
+        if len(render_artifacts) < 6:
+            raise AssertionError("expected at least 6 render artifacts after Blender processing")
         event_types = [event["event_type"] for event in response.body_json["events"]]
-        if "render_started" not in event_types:
-            raise AssertionError("render_started event missing after process")
-        return "process endpoint switched run to rendering"
+        for event_type in ["render_started", "render_finished"]:
+            if event_type not in event_types:
+                raise AssertionError(f"{event_type} event missing after process")
+        return "process endpoint rendered source obj into render artifacts"
 
     def case_process_twice_fails(self) -> str:
         response = self._request(
@@ -331,7 +460,7 @@ class E2ERunner:
             token=self.context.access_token,
         )
         self._expect_status(response, 409)
-        return "second process call rejected while rendering"
+        return "second process call rejected after renders already exist"
 
     def case_get_run_after_process(self) -> str:
         response = self._request(
@@ -340,14 +469,27 @@ class E2ERunner:
             token=self.context.access_token,
         )
         self._expect_status(response, 200)
-        self._expect_json_path(response.body_json, ["status"], "rendering")
+        self._expect_json_path(response.body_json, ["status"], "completed")
         if response.body_json["source_artifact_id"] is None:
             raise AssertionError("source_artifact_id is missing after successful upload")
         event_types = [event["event_type"] for event in response.body_json["events"]]
-        required = {"run_created", "source_uploaded", "render_started"}
+        required = {
+            "run_created",
+            "collage_created",
+            "collage_selected",
+            "generation_completed",
+            "source_uploaded",
+            "render_started",
+            "render_finished",
+        }
         if not required.issubset(set(event_types)):
             raise AssertionError(f"missing events: {sorted(required - set(event_types))}")
-        return "final run state persisted as rendering with expected events"
+        generation_statuses = [
+            generation["status"] for generation in response.body_json["generations"]
+        ]
+        if "succeeded" not in generation_statuses:
+            raise AssertionError("expected at least one succeeded generation in final run state")
+        return "final run state persisted as completed with expected events"
 
     def _request(
         self,
@@ -356,7 +498,7 @@ class E2ERunner:
         *,
         json_body: dict[str, Any] | None = None,
         token: str | None = None,
-        files: dict[str, Path] | None = None,
+        files: list[tuple[str, Path]] | None = None,
     ) -> Response:
         url = self._build_url(path)
         headers: dict[str, str] = {}
@@ -382,9 +524,9 @@ class E2ERunner:
             body_bytes = exc.read()
             return self._build_response(exc.code, exc.headers, body_bytes)
 
-    def _encode_multipart(self, files: dict[str, Path], boundary: str) -> bytes:
+    def _encode_multipart(self, files: list[tuple[str, Path]], boundary: str) -> bytes:
         body = bytearray()
-        for field_name, path in files.items():
+        for field_name, path in files:
             content = path.read_bytes()
             content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
             body.extend(f"--{boundary}\r\n".encode())
@@ -461,7 +603,6 @@ class E2ERunner:
 def main() -> int:
     runner = E2ERunner()
     return runner.run()
-
 
 if __name__ == "__main__":
     sys.exit(main())
