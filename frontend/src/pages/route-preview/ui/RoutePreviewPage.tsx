@@ -122,8 +122,7 @@ export function RoutePreviewPage({
                       </div>
 
                       <div className={styles.pageCenter}>
-                        <div className={styles.documentTitle}>КОМПЛЕКТ ДОКУМЕНТОВ</div>
-                        <div className={styles.documentSubtitle}>технологического процесса изготовления изделия</div>
+                        <div className={styles.documentTitle}>Маршрутный лист</div>
                       </div>
 
                       <div className={styles.bottomStamp}>

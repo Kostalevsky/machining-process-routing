@@ -16,6 +16,17 @@
   touch-action: none;
 }
 
+.threeCanvas {
+  position: absolute;
+  inset: 0;
+}
+
+.threeCanvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .viewerCard .viewport {
   aspect-ratio: 1;
   min-height: 360px;

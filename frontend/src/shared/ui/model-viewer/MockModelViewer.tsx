@@ -1,11 +1,7 @@
-import {
-    PointerEvent,
-    WheelEvent,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from "react";
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import styles from "./MockModelViewer.module.scss";
 
 type MockModelViewerProps = {
@@ -15,136 +11,129 @@ type MockModelViewerProps = {
     onExpand?: () => void;
 };
 
-type RotationState = {
-    x: number;
-    y: number;
-    z: number;
-    scale: number;
+type ViewerScene = {
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    renderer: THREE.WebGLRenderer;
+    initialCameraPosition: THREE.Vector3;
+    initialTarget: THREE.Vector3;
+    object: THREE.Object3D;
 };
 
-const initialRotation: RotationState = {
-    x: -24,
-    y: 28,
-    z: -8,
-    scale: 1,
-};
+const modelMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc9cccb,
+    metalness: 0.08,
+    roughness: 0.48,
+    side: THREE.DoubleSide,
+});
 
-type MeshData = {
-    vertices: Array<[number, number, number]>;
-    edges: Array<[number, number]>;
-};
+const edgeMaterial = new THREE.LineBasicMaterial({
+    color: 0x8c9090,
+    transparent: true,
+    opacity: 0.58,
+});
 
-function truncateFileName(name: string, maxLength = 30) {
-    if (name.length <= maxLength) {
-        return name;
-    }
+function disposeObject(object: THREE.Object3D) {
+    object.traverse((child) => {
+        const mesh = child as THREE.Mesh;
 
-    const dotIndex = name.lastIndexOf(".");
-    const extension = dotIndex > 0 ? name.slice(dotIndex) : "";
-    const base = extension ? name.slice(0, dotIndex) : name;
-    const head = base.slice(0, 14);
-    const tail = base.slice(-6);
-    return `${head}...${tail}${extension}`;
+        if (mesh.geometry) {
+            mesh.geometry.dispose();
+        }
+    });
 }
 
-function rotatePoint(
-    [x, y, z]: [number, number, number],
-    rotation: RotationState,
+function decorateModel(object: THREE.Object3D) {
+    object.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+
+        if (!mesh.isMesh) {
+            return;
+        }
+
+        mesh.material = modelMaterial;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        const edges = new THREE.EdgesGeometry(mesh.geometry, 24);
+        const outline = new THREE.LineSegments(edges, edgeMaterial);
+        outline.renderOrder = 1;
+        mesh.add(outline);
+    });
+}
+
+function normalizeModel(object: THREE.Object3D) {
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxSide = Math.max(size.x, size.y, size.z, 1);
+
+    object.position.sub(center);
+    object.scale.setScalar(2.45 / maxSide);
+    object.rotation.set(
+        THREE.MathUtils.degToRad(-16),
+        THREE.MathUtils.degToRad(30),
+        THREE.MathUtils.degToRad(-6),
+    );
+}
+
+function createFallbackModel() {
+    const group = new THREE.Group();
+
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 1.35, 0.58, 4, 4, 2),
+        modelMaterial,
+    );
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+
+    const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.34, 0.08, 24, 72),
+        modelMaterial,
+    );
+    ring.position.z = 0.32;
+    group.add(ring);
+
+    const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(body.geometry, 18),
+        edgeMaterial,
+    );
+    body.add(edges);
+
+    group.rotation.set(
+        THREE.MathUtils.degToRad(-18),
+        THREE.MathUtils.degToRad(34),
+        THREE.MathUtils.degToRad(-8),
+    );
+
+    return group;
+}
+
+function fitCameraToObject(
+    camera: THREE.PerspectiveCamera,
+    controls: OrbitControls,
+    object: THREE.Object3D,
 ) {
-    const rx = (rotation.x * Math.PI) / 180;
-    const ry = (rotation.y * Math.PI) / 180;
-    const rz = (rotation.z * Math.PI) / 180;
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxSide = Math.max(size.x, size.y, size.z, 1);
+    const distance = maxSide * 2.65;
 
-    let px = x;
-    let py = y;
-    let pz = z;
+    camera.position.set(distance, distance * 0.64, distance * 1.05);
+    camera.near = distance / 100;
+    camera.far = distance * 100;
+    camera.updateProjectionMatrix();
 
-    const cosX = Math.cos(rx);
-    const sinX = Math.sin(rx);
-    [py, pz] = [py * cosX - pz * sinX, py * sinX + pz * cosX];
-
-    const cosY = Math.cos(ry);
-    const sinY = Math.sin(ry);
-    [px, pz] = [px * cosY + pz * sinY, -px * sinY + pz * cosY];
-
-    const cosZ = Math.cos(rz);
-    const sinZ = Math.sin(rz);
-    [px, py] = [px * cosZ - py * sinZ, px * sinZ + py * cosZ];
-
-    return [px, py, pz] as const;
-}
-
-function parseObj(text: string): MeshData | null {
-    const vertices: Array<[number, number, number]> = [];
-    const edges = new Set<string>();
-
-    for (const rawLine of text.split("\n")) {
-        const line = rawLine.trim();
-
-        if (line.startsWith("v ")) {
-            const [, xs, ys, zs] = line.split(/\s+/);
-            const x = Number(xs);
-            const y = Number(ys);
-            const z = Number(zs);
-
-            if ([x, y, z].every((value) => Number.isFinite(value))) {
-                vertices.push([x, y, z]);
-            }
-        }
-
-        if (line.startsWith("f ")) {
-            const faceIndices = line
-                .split(/\s+/)
-                .slice(1)
-                .map((part) => Number(part.split("/")[0]) - 1)
-                .filter((index) => Number.isInteger(index) && index >= 0);
-
-            for (let index = 0; index < faceIndices.length; index += 1) {
-                const a = faceIndices[index];
-                const b = faceIndices[(index + 1) % faceIndices.length];
-                const edge = a < b ? `${a}-${b}` : `${b}-${a}`;
-                edges.add(edge);
-            }
-        }
-    }
-
-    if (vertices.length === 0 || edges.size === 0) {
-        return null;
-    }
-
-    const xs = vertices.map(([x]) => x);
-    const ys = vertices.map(([, y]) => y);
-    const zs = vertices.map(([, , z]) => z);
-    const center: [number, number, number] = [
-        (Math.min(...xs) + Math.max(...xs)) / 2,
-        (Math.min(...ys) + Math.max(...ys)) / 2,
-        (Math.min(...zs) + Math.max(...zs)) / 2,
-    ];
-
-    const centeredVertices = vertices.map(
-        ([x, y, z]) =>
-            [x - center[0], y - center[1], z - center[2]] as [
-                number,
-                number,
-                number,
-            ],
-    );
-    const radius = Math.max(
-        ...centeredVertices.map(([x, y, z]) =>
-            Math.sqrt(x * x + y * y + z * z),
-        ),
-        1,
-    );
+    controls.target.copy(center);
+    controls.minDistance = distance * 0.35;
+    controls.maxDistance = distance * 5;
+    controls.update();
 
     return {
-        vertices: centeredVertices.map(([x, y, z]) => [
-            x / radius,
-            y / radius,
-            z / radius,
-        ]),
-        edges: Array.from(edges).map(
-            (edge) => edge.split("-").map(Number) as [number, number],
-        ),
+        cameraPosition: camera.position.clone(),
+        target: center.clone(),
     };
 }
 
@@ -154,228 +143,180 @@ export function MockModelViewer({
     mode = "card",
     onExpand,
 }: MockModelViewerProps) {
-    const [rotation, setRotation] = useState(initialRotation);
-    const dragRef = useRef<{ x: number; y: number } | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [mesh, setMesh] = useState<MeshData | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const sceneRef = useRef<ViewerScene | null>(null);
     const isModal = mode === "modal";
 
-    const transform = useMemo(
-        () =>
-            `translateZ(0) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) rotateZ(${rotation.z}deg) scale(${rotation.scale})`,
-        [rotation],
-    );
-
     useEffect(() => {
-        let cancelled = false;
+        const container = containerRef.current;
 
-        async function loadMesh() {
-            if (!modelUrl || !fileName.toLowerCase().endsWith(".obj")) {
-                setMesh(null);
+        if (!container) {
+            return;
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = null;
+
+        const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.enablePan = false;
+        controls.rotateSpeed = 0.78;
+        controls.zoomSpeed = 0.9;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.8);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 3.1);
+        keyLight.position.set(4, 6, 5);
+        keyLight.castShadow = true;
+
+        const fillLight = new THREE.DirectionalLight(0xe9f0ff, 1.4);
+        fillLight.position.set(-5, 2, 4);
+
+        const rimLight = new THREE.DirectionalLight(0xffffff, 1.25);
+        rimLight.position.set(-2, 4, -5);
+
+        const grid = new THREE.GridHelper(5.6, 18, 0xdedede, 0xe9e9e9);
+        grid.position.y = -1.18;
+        grid.material.transparent = true;
+        grid.material.opacity = 0.55;
+
+        const shadowPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(5.2, 5.2),
+            new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.1 }),
+        );
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.position.y = -1.2;
+        shadowPlane.receiveShadow = true;
+
+        scene.add(ambientLight, keyLight, fillLight, rimLight, grid, shadowPlane);
+
+        function resize() {
+            const { width, height } = container.getBoundingClientRect();
+            const safeWidth = Math.max(width, 1);
+            const safeHeight = Math.max(height, 1);
+
+            renderer.setSize(safeWidth, safeHeight, false);
+            camera.aspect = safeWidth / safeHeight;
+            camera.updateProjectionMatrix();
+        }
+
+        const resizeObserver = new ResizeObserver(resize);
+        resizeObserver.observe(container);
+        resize();
+
+        let frameId = 0;
+
+        function animate() {
+            controls.update();
+            renderer.render(scene, camera);
+            frameId = window.requestAnimationFrame(animate);
+        }
+
+        let isDisposed = false;
+
+        const addObject = (object: THREE.Object3D) => {
+            if (isDisposed) {
+                disposeObject(object);
                 return;
             }
 
-            try {
-                const response = await fetch(modelUrl);
-                const text = await response.text();
-                const parsed = parseObj(text);
+            decorateModel(object);
+            normalizeModel(object);
+            scene.add(object);
 
-                if (!cancelled) {
-                    setMesh(parsed);
-                    setRotation(initialRotation);
-                }
-            } catch {
-                if (!cancelled) {
-                    setMesh(null);
-                }
-            }
+            const { cameraPosition, target } = fitCameraToObject(
+                camera,
+                controls,
+                object,
+            );
+
+            sceneRef.current = {
+                camera,
+                controls,
+                renderer,
+                initialCameraPosition: cameraPosition,
+                initialTarget: target,
+                object,
+            };
+        };
+
+        if (modelUrl && fileName.toLowerCase().endsWith(".obj")) {
+            const loader = new OBJLoader();
+            loader.load(
+                modelUrl,
+                addObject,
+                undefined,
+                () => addObject(createFallbackModel()),
+            );
+        } else {
+            addObject(createFallbackModel());
         }
 
-        loadMesh();
+        animate();
 
         return () => {
-            cancelled = true;
+            isDisposed = true;
+            window.cancelAnimationFrame(frameId);
+            resizeObserver.disconnect();
+            controls.dispose();
+            renderer.dispose();
+            renderer.domElement.remove();
+
+            if (sceneRef.current?.object) {
+                disposeObject(sceneRef.current.object);
+            }
+
+            sceneRef.current = null;
         };
     }, [fileName, modelUrl]);
 
-    useEffect(() => {
-        const canvas = canvasRef.current;
+    function zoom(multiplier: number) {
+        const viewer = sceneRef.current;
 
-        if (!canvas || !mesh) {
+        if (!viewer) {
             return;
         }
 
-        const context = canvas.getContext("2d");
+        const direction = viewer.camera.position
+            .clone()
+            .sub(viewer.controls.target)
+            .multiplyScalar(multiplier);
 
-        if (!context) {
-            return;
-        }
-
-        function draw() {
-            const rect = canvas.getBoundingClientRect();
-            const width = Math.max(1, Math.floor(rect.width));
-            const height = Math.max(1, Math.floor(rect.height));
-
-            if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width;
-                canvas.height = height;
-            }
-
-            context.clearRect(0, 0, width, height);
-            context.lineJoin = "round";
-            context.lineCap = "round";
-
-            const projected = mesh.vertices.map((vertex) => {
-                const [x, y, z] = rotatePoint(vertex, rotation);
-                const depth = 3.2 + z;
-                const perspective = 1 / depth;
-                const scale = Math.min(width, height) * 0.34 * rotation.scale;
-
-                return {
-                    x: width / 2 + x * scale * perspective,
-                    y: height / 2 - y * scale * perspective,
-                };
-            });
-
-            context.beginPath();
-            mesh.edges.forEach(([a, b]) => {
-                const start = projected[a];
-                const end = projected[b];
-
-                if (!start || !end) {
-                    return;
-                }
-
-                context.moveTo(start.x, start.y);
-                context.lineTo(end.x, end.y);
-            });
-            context.strokeStyle = "rgba(185, 185, 185, 0.95)";
-            context.lineWidth = isModal ? 5 : 4;
-            context.stroke();
-
-            context.beginPath();
-            mesh.edges.forEach(([a, b]) => {
-                const start = projected[a];
-                const end = projected[b];
-
-                if (!start || !end) {
-                    return;
-                }
-
-                context.moveTo(start.x, start.y);
-                context.lineTo(end.x, end.y);
-            });
-            context.strokeStyle = "rgba(112, 112, 112, 0.92)";
-            context.lineWidth = isModal ? 1.9 : 1.5;
-            context.stroke();
-        }
-
-        draw();
-        window.addEventListener("resize", draw);
-        return () => window.removeEventListener("resize", draw);
-    }, [isModal, mesh, rotation]);
-
-    function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-        if ((event.target as HTMLElement).closest("button")) {
-            return;
-        }
-
-        dragRef.current = { x: event.clientX, y: event.clientY };
-        event.currentTarget.setPointerCapture(event.pointerId);
-    }
-
-    function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-        if (!dragRef.current) {
-            return;
-        }
-
-        const dx = event.clientX - dragRef.current.x;
-        const dy = event.clientY - dragRef.current.y;
-
-        dragRef.current = { x: event.clientX, y: event.clientY };
-
-        setRotation((current) => ({
-            ...current,
-            x: current.x - dy * 0.35,
-            y: current.y + dx * 0.35,
-        }));
-    }
-
-    function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
-        dragRef.current = null;
-        event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-
-    function handleWheel(event: WheelEvent<HTMLDivElement>) {
-        event.preventDefault();
-        setRotation((current) => ({
-            ...current,
-            scale: Math.min(
-                2.4,
-                Math.max(0.55, current.scale - event.deltaY * 0.0012),
-            ),
-        }));
-    }
-
-    function updateZoom(nextScale: number) {
-        setRotation((current) => ({
-            ...current,
-            scale: Math.min(2.4, Math.max(0.55, nextScale)),
-        }));
-    }
-
-    function rotateZ(delta: number) {
-        setRotation((current) => ({
-            ...current,
-            z: current.z + delta,
-        }));
+        viewer.camera.position.copy(viewer.controls.target).add(direction);
+        viewer.controls.update();
     }
 
     function resetView() {
-        setRotation(initialRotation);
+        const viewer = sceneRef.current;
+
+        if (!viewer) {
+            return;
+        }
+
+        viewer.camera.position.copy(viewer.initialCameraPosition);
+        viewer.controls.target.copy(viewer.initialTarget);
+        viewer.controls.update();
     }
 
     return (
         <div className={isModal ? styles.viewerModal : styles.viewerCard}>
-            <div
-                className={styles.viewport}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onWheel={handleWheel}
-            >
-                {mesh ? (
-                    <div className={styles.sceneReal}>
-                        <div className={styles.grid} />
-                        <canvas ref={canvasRef} className={styles.canvas} />
-                    </div>
-                ) : (
-                    <div className={styles.scene}>
-                        <div className={styles.grid} />
-                        <div className={styles.modelShadow} />
+            <div className={styles.viewport}>
+                <div ref={containerRef} className={styles.threeCanvas} />
 
-                        <div className={styles.model} style={{ transform }}>
-                            <div className={`${styles.face} ${styles.front}`} />
-                            <div className={`${styles.face} ${styles.back}`} />
-                            <div className={`${styles.face} ${styles.left}`} />
-                            <div className={`${styles.face} ${styles.right}`} />
-                            <div className={`${styles.face} ${styles.top}`} />
-                            <div
-                                className={`${styles.face} ${styles.bottom}`}
-                            />
-                            <div className={styles.ring} />
-                            <div className={styles.core} />
-                        </div>
-                    </div>
-                )}
                 {!isModal && onExpand ? (
                     <button
                         type="button"
                         className={styles.expandButton}
-                        onPointerDown={(event) => {
-                            event.stopPropagation();
-                        }}
                         onClick={(event) => {
                             event.stopPropagation();
                             onExpand();
@@ -390,14 +331,14 @@ export function MockModelViewer({
                 <button
                     type="button"
                     className={styles.controlButton}
-                    onClick={() => updateZoom(rotation.scale + 0.15)}
+                    onClick={() => zoom(0.84)}
                 >
                     +
                 </button>
                 <button
                     type="button"
                     className={styles.controlButton}
-                    onClick={() => updateZoom(rotation.scale - 0.15)}
+                    onClick={() => zoom(1.16)}
                 >
                     -
                 </button>

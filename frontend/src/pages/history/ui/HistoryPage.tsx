@@ -102,16 +102,6 @@ export function HistoryPage({ currentPath, profile, onNavigate, onLogout }: Hist
                 >
                   Скачать JSON
                 </button>
-                <button
-                  type="button"
-                  className={styles.actionButton}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    downloadHistoryModel(item);
-                  }}
-                >
-                  Скачать 3D
-                </button>
               </div>
             </article>
           ))}

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { simulateSuccessfulProcessing } from "../../../shared";
+import { validateModelFile } from "../../../shared/lib/validation";
 import type { Stage } from "../../../shared";
 
 type UseModelProcessingOptions = {
@@ -15,6 +16,24 @@ export function useModelProcessing({ onComplete }: UseModelProcessingOptions = {
   const [llm, setLlm] = useState<"qwen-vl-max" | "qwen2.5-vl-72b" | "pixtral-12b">("qwen-vl-max");
 
   const onSelect = useCallback((nextFile: File | null) => {
+    if (!nextFile) {
+      setFile(null);
+      setError(null);
+      setJobId(null);
+      setStage("idle");
+      return;
+    }
+
+    const validationError = validateModelFile(nextFile);
+
+    if (validationError) {
+      setFile(null);
+      setError(validationError);
+      setJobId(null);
+      setStage("idle");
+      return;
+    }
+
     setFile(nextFile);
     setError(null);
     setJobId(null);
@@ -26,7 +45,10 @@ export function useModelProcessing({ onComplete }: UseModelProcessingOptions = {
   );
 
   const submit = async () => {
-    if (!file) {
+    const validationError = validateModelFile(file);
+
+    if (validationError) {
+      setError(validationError);
       return;
     }
 

@@ -107,6 +107,21 @@
   background: #ffffff;
 }
 
+.field input[aria-invalid="true"] {
+  border-color: #c72828;
+  background: #fffafa;
+}
+
+.field input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 4px rgba(199, 40, 40, 0.12);
+}
+
+.errorText {
+  color: #c72828;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .doubleFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
