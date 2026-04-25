@@ -4,6 +4,12 @@
   gap: 14px;
 }
 
+.viewerModal {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .viewport {
   position: relative;
   overflow: hidden;
@@ -27,13 +33,22 @@
   height: 100%;
 }
 
+.modalOverlayContent {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  z-index: 4;
+  pointer-events: auto;
+}
+
 .viewerCard .viewport {
   aspect-ratio: 1;
   min-height: 360px;
 }
 
 .viewerModal .viewport {
-  min-height: min(78vh, 820px);
+  min-height: 0;
+  height: 100%;
 }
 
 .viewport:active {
@@ -238,6 +253,10 @@
   }
 
   .viewerModal .viewport {
-    min-height: min(70vh, 620px);
+    min-height: 0;
+  }
+
+  .controls {
+    gap: 8px;
   }
 }

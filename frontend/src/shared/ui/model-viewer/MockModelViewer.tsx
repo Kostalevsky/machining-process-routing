@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
@@ -9,6 +9,7 @@ type MockModelViewerProps = {
     modelUrl?: string;
     mode?: "card" | "modal";
     onExpand?: () => void;
+    modalOverlay?: ReactNode;
 };
 
 type ViewerScene = {
@@ -142,6 +143,7 @@ export function MockModelViewer({
     modelUrl,
     mode = "card",
     onExpand,
+    modalOverlay,
 }: MockModelViewerProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const sceneRef = useRef<ViewerScene | null>(null);
@@ -312,6 +314,12 @@ export function MockModelViewer({
         <div className={isModal ? styles.viewerModal : styles.viewerCard}>
             <div className={styles.viewport}>
                 <div ref={containerRef} className={styles.threeCanvas} />
+
+                {isModal && modalOverlay ? (
+                    <div className={styles.modalOverlayContent}>
+                        {modalOverlay}
+                    </div>
+                ) : null}
 
                 {!isModal && onExpand ? (
                     <button

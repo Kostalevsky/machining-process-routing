@@ -24,6 +24,22 @@ export function RoutePreviewPage({
   onLogout,
 }: RoutePreviewPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [dimensionErrors, setDimensionErrors] = useState({
+    height: "",
+    width: "",
+    depth: "",
+  });
+  const [dimensions, setDimensions] = useState({
+    height: "",
+    width: "",
+    depth: "",
+  });
+  const [dimensionDraft, setDimensionDraft] = useState({
+    height: "",
+    width: "",
+    depth: "",
+  });
 
   const jsonString = useMemo(() => JSON.stringify(result.routeSheet, null, 2), [result.routeSheet]);
   const pdfBlob = useMemo(() => createRouteSheetPdfBlob(result.routeSheet), [result.routeSheet]);
@@ -67,6 +83,57 @@ export function RoutePreviewPage({
       setIsModalOpen(true);
     }, 0);
   }
+
+  function handleOpenInfoModal() {
+    setDimensionDraft(dimensions);
+    setDimensionErrors({
+      height: "",
+      width: "",
+      depth: "",
+    });
+    setIsInfoModalOpen(true);
+  }
+
+  function validateDimensionField(value: string) {
+    const normalized = value.trim().replace(",", ".");
+
+    if (!normalized) {
+      return "Поле обязательно";
+    }
+
+    if (!/^\d+([.]\d+)?$/.test(normalized)) {
+      return "Введите число";
+    }
+
+    if (Number(normalized) <= 0) {
+      return "Значение должно быть больше 0";
+    }
+
+    return "";
+  }
+
+  function handleAddDimensions() {
+    const nextErrors = {
+      height: validateDimensionField(dimensionDraft.height),
+      width: validateDimensionField(dimensionDraft.width),
+      depth: validateDimensionField(dimensionDraft.depth),
+    };
+
+    setDimensionErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    setDimensions({
+      height: dimensionDraft.height.trim().replace(",", "."),
+      width: dimensionDraft.width.trim().replace(",", "."),
+      depth: dimensionDraft.depth.trim().replace(",", "."),
+    });
+    setIsInfoModalOpen(false);
+  }
+
+  const hasDimensions = Object.values(dimensions).some((value) => value.trim().length > 0);
 
   return (
     <div className={styles.page}>
@@ -191,10 +258,18 @@ export function RoutePreviewPage({
       </main>
 
       {isModalOpen ? (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setIsModalOpen(false)}>
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            setIsModalOpen(false);
+            setIsInfoModalOpen(false);
+          }}
+        >
           <div className={styles.modal} onClick={(event) => event.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <div>
+              <div className={styles.modalHeaderInfo}>
                 <strong>3D-сцена модели</strong>
                 <span title={result.uploadedFileName}>{truncateFileName(result.uploadedFileName, 52)}</span>
               </div>
@@ -203,7 +278,134 @@ export function RoutePreviewPage({
               </button>
             </div>
 
-            <MockModelViewer fileName={result.uploadedFileName} modelUrl={result.modelUrl} mode="modal" />
+            <MockModelViewer
+              fileName={result.uploadedFileName}
+              modelUrl={result.modelUrl}
+              mode="modal"
+              modalOverlay={
+                <>
+                  <div className={styles.sceneInfoPanel}>
+                    <button
+                      type="button"
+                      className={styles.sceneInfoButton}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleOpenInfoModal();
+                      }}
+                    >
+                      Добавить доп. информацию
+                      </button>
+
+                    {hasDimensions ? (
+                      <div className={styles.dimensionSummary}>
+                        <span>Высота: {dimensions.height || "—"} мм</span>
+                        <span>Ширина: {dimensions.width || "—"} мм</span>
+                        <span>Глубина: {dimensions.depth || "—"} мм</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {isInfoModalOpen ? (
+                    <div
+                      className={styles.infoModal}
+                      role="dialog"
+                      aria-label="Дополнительная информация о детали"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className={styles.infoModalHeader}>
+                        <strong>Параметры детали</strong>
+                        <button
+                          type="button"
+                          className={styles.infoModalClose}
+                          onClick={() => setIsInfoModalOpen(false)}
+                          aria-label="Закрыть"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div className={styles.infoFields}>
+                        <label className={styles.infoField}>
+                          <span>Высота, мм</span>
+                          <input
+                            type="text"
+                            value={dimensionDraft.height}
+                            className={dimensionErrors.height ? styles.inputError : ""}
+                            onChange={(event) =>
+                              {
+                                setDimensionDraft((current) => ({
+                                  ...current,
+                                  height: event.target.value,
+                                }));
+                                setDimensionErrors((current) => ({
+                                  ...current,
+                                  height: "",
+                                }));
+                              }
+                            }
+                          />
+                          {dimensionErrors.height ? (
+                            <span className={styles.fieldError}>{dimensionErrors.height}</span>
+                          ) : null}
+                        </label>
+
+                        <label className={styles.infoField}>
+                          <span>Ширина, мм</span>
+                          <input
+                            type="text"
+                            value={dimensionDraft.width}
+                            className={dimensionErrors.width ? styles.inputError : ""}
+                            onChange={(event) =>
+                              {
+                                setDimensionDraft((current) => ({
+                                  ...current,
+                                  width: event.target.value,
+                                }));
+                                setDimensionErrors((current) => ({
+                                  ...current,
+                                  width: "",
+                                }));
+                              }
+                            }
+                          />
+                          {dimensionErrors.width ? (
+                            <span className={styles.fieldError}>{dimensionErrors.width}</span>
+                          ) : null}
+                        </label>
+
+                        <label className={styles.infoField}>
+                          <span>Глубина, мм</span>
+                          <input
+                            type="text"
+                            value={dimensionDraft.depth}
+                            className={dimensionErrors.depth ? styles.inputError : ""}
+                            onChange={(event) =>
+                              {
+                                setDimensionDraft((current) => ({
+                                  ...current,
+                                  depth: event.target.value,
+                                }));
+                                setDimensionErrors((current) => ({
+                                  ...current,
+                                  depth: "",
+                                }));
+                              }
+                            }
+                          />
+                          {dimensionErrors.depth ? (
+                            <span className={styles.fieldError}>{dimensionErrors.depth}</span>
+                          ) : null}
+                        </label>
+                      </div>
+
+                      <button type="button" className={styles.primaryButton} onClick={handleAddDimensions}>
+                        Добавить
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              }
+            />
           </div>
         </div>
       ) : null}

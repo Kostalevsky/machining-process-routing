@@ -1,5 +1,5 @@
 export { API_BASE } from "./config/api";
-export { getCurrentMockResult, simulateSuccessfulProcessing } from "./lib/mockProcessing";
+export { createProcessResultFromRun, getCurrentMockResult, setCurrentMockResult, simulateSuccessfulProcessing } from "./lib/mockProcessing";
 export { createRouteSheetPdfBlob } from "./lib/routeSheetPdf";
 export { toApiUrl } from "./lib/url";
 export type { ProcessResponse, Stage } from "./types/process";

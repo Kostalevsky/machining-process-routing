@@ -10,7 +10,7 @@ COPY frontend/index.html /app/
 COPY frontend/vite.config.ts /app/
 COPY frontend/tailwind.config.cjs /app/
 COPY frontend/postcss.config.cjs /app/
-ARG VITE_API_BASE=/api
+ARG VITE_API_BASE=/api/v1
 ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 

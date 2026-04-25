@@ -10,6 +10,7 @@ import {
   loginWithMock,
   logoutMock,
   registerWithMock,
+  restoreSession,
   updateMockProfile,
 } from "../shared/lib/mockAuth";
 
@@ -20,6 +21,19 @@ export function AppRouter() {
   );
   const [session, setSession] = useState(getSessionState);
   const previewResult = pathname === "/route-preview" ? getCurrentMockResult() : null;
+
+  useEffect(() => {
+    if (!session.isAuthenticated) {
+      restoreSession().then((result) => {
+        if (result.success) {
+          setSession(getSessionState());
+          window.history.replaceState({}, "", "/");
+          setPathname("/");
+          setNavigationState(null);
+        }
+      });
+    }
+  }, []);
 
   useEffect(() => {
     function handlePopState() {
@@ -60,16 +74,28 @@ export function AppRouter() {
     setNavigationState(state ?? null);
   }
 
-  function handleLogin(email: string) {
-    loginWithMock(email);
+  async function handleLogin(email: string, password: string) {
+    const result = await loginWithMock(email, password);
+
+    if (!result.success) {
+      return result.error;
+    }
+
     setSession(getSessionState());
     navigate("/");
+    return null;
   }
 
-  function handleRegister(profile: Parameters<typeof registerWithMock>[0]) {
-    registerWithMock(profile);
+  async function handleRegister(profile: Parameters<typeof registerWithMock>[0]) {
+    const result = await registerWithMock(profile);
+
+    if (!result.success) {
+      return result.error;
+    }
+
     setSession(getSessionState());
     navigate("/");
+    return null;
   }
 
   function handleLogout() {

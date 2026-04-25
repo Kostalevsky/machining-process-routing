@@ -38,7 +38,7 @@ export function validatePassword(value: string) {
     return requiredError;
   }
 
-  return value.trim().length >= 6 ? "" : "Пароль должен содержать не менее 6 символов";
+  return value.trim().length >= 8 ? "" : "Пароль должен содержать не менее 8 символов";
 }
 
 export function validatePhone(value: string) {
