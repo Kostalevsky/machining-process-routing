@@ -13,7 +13,7 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.user import User
-from app.modules.identity.schemas import TokenPairResponse
+from app.modules.identity.schemas import TokenPairResponse, UserUpdateRequest
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -63,6 +63,22 @@ def refresh_tokens(db: Session, *, refresh_token: str) -> TokenPairResponse:
             detail="User for this token was not found.",
         )
     return build_token_pair(user)
+
+
+def update_current_user_profile(
+    db: Session,
+    *,
+    user: User,
+    payload: UserUpdateRequest,
+) -> User:
+    update_data = payload.model_dump(exclude_unset=True)
+    for field_name, value in update_data.items():
+        setattr(user, field_name, value)
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def get_current_user(

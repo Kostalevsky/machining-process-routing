@@ -9,6 +9,7 @@ from app.modules.identity.schemas import (
     RegisterRequest,
     TokenPairResponse,
     UserResponse,
+    UserUpdateRequest,
 )
 from app.modules.identity.service import (
     authenticate_user,
@@ -16,6 +17,7 @@ from app.modules.identity.service import (
     get_current_user,
     refresh_tokens,
     register_user,
+    update_current_user_profile,
 )
 
 router = APIRouter()
@@ -43,3 +45,12 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> Toke
 @router.get("/users/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     return current_user
+
+
+@router.patch("/users/me", response_model=UserResponse)
+def update_me(
+    payload: UserUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    return update_current_user_profile(db, user=current_user, payload=payload)
