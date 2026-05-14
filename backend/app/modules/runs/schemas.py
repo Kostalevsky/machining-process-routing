@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import settings
 from app.models.enums import ArtifactType, GenerationStatus, RunStatus
 
 
@@ -19,9 +20,9 @@ class CollageSelectRequest(BaseModel):
 
 
 class GenerationCreateRequest(BaseModel):
-    provider: str = "stub"
-    model_name: str = "mock-generator"
-    prompt_version: str = "v1"
+    provider: str = settings.ml_default_provider
+    model_name: str = settings.ml_default_model_name
+    prompt_version: str = settings.ml_prompt_version
 
 
 class ArtifactResponse(BaseModel):

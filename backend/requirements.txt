@@ -14,5 +14,8 @@ httpx
 ruff
 pre-commit
 numpy
+pandas
 Pillow
 scikit-learn
+openai
+mistralai

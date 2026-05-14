@@ -58,3 +58,25 @@ alembic upgrade head
 - `POST /api/v1/runs/{run_id}/process`
 
 Для всех ручек кроме `health` и `auth/*` нужен Bearer access token.
+
+## ML / VLM Генерация JSON
+
+`POST /api/v1/runs/{run_id}/generations` теперь может работать в нескольких режимах:
+
+- `provider=stub` — локальный режим без внешнего API, полезен для тестов.
+- `provider=mistral` — Pixtral через Mistral API.
+- `provider=qwen` — Qwen VL через DashScope OpenAI-compatible API.
+
+Пример payload для реальной генерации:
+
+```json
+{
+  "provider": "qwen",
+  "model_name": "qwen-vl-max",
+  "prompt_version": "v1"
+}
+```
+
+Для `mistral` нужен `ML_MISTRAL_API_KEY`, для `qwen` нужен `ML_QWEN_API_KEY`.
+Prompt-файлы и таблица оборудования/стандартов перенесены внутрь backend в
+`app/modules/ml/assets`, поэтому контейнеру не нужен доступ к соседней ML-папке.

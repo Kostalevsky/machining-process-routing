@@ -13,6 +13,7 @@ from app.models.generation import Generation
 from app.models.run import Run
 from app.models.run_event import RunEvent
 from app.modules.artifacts.service import build_generated_json_object_key, create_artifact
+from app.modules.ml.service import generate_process_json_from_collage
 
 
 def create_generation_for_run(
@@ -63,19 +64,56 @@ def create_generation_for_run(
         )
     )
 
-    generated_payload = {
-        "run_id": run.id,
-        "user_id": run.user_id,
-        "generation_id": generation.id,
-        "provider": provider,
-        "model_name": model_name,
-        "prompt_version": prompt_version,
-        "input_collage_artifact_id": collage_artifact.id,
-        "status": "stub_generated",
-        "generated_at": datetime.now(UTC).isoformat(),
-    }
+    run.status = RunStatus.GENERATING_JSON
+    db.add(run)
+    db.commit()
+
+    try:
+        collage_bytes = storage.download_bytes(collage_artifact.object_key)
+        collage_size = int((collage_artifact.meta_json or {}).get("collage_size") or 6)
+        ml_result = generate_process_json_from_collage(
+            collage_bytes=collage_bytes,
+            collage_file_name=collage_artifact.file_name,
+            collage_size=collage_size,
+            provider=provider,
+            model_name=model_name,
+            prompt_version=prompt_version,
+        )
+        generated_payload = {
+            **ml_result.payload,
+            "_backend_generation": {
+                "run_id": run.id,
+                "user_id": run.user_id,
+                "generation_id": generation.id,
+                "provider": ml_result.provider,
+                "model_name": ml_result.model_name,
+                "prompt_version": ml_result.prompt_version,
+                "input_collage_artifact_id": collage_artifact.id,
+                "generated_at": datetime.now(UTC).isoformat(),
+            },
+        }
+    except Exception as exc:
+        generation.status = GenerationStatus.FAILED
+        generation.error_message = str(exc)
+        generation.completed_at = datetime.now(UTC)
+        run.status = RunStatus.FAILED
+        db.add(generation)
+        db.add(run)
+        db.add(
+            RunEvent(
+                run_id=run.id,
+                event_type="generation_failed",
+                payload_json={"generation_id": generation.id, "error": str(exc)},
+            )
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JSON generation failed.",
+        ) from exc
+
     generated_bytes = (
-        json.dumps(generated_payload, ensure_ascii=True, indent=2) + "\n"
+        json.dumps(generated_payload, ensure_ascii=False, indent=2) + "\n"
     ).encode("utf-8")
     object_key = build_generated_json_object_key(user_id=run.user_id, run_id=run.id)
     checksum = sha256(generated_bytes).hexdigest()
@@ -99,6 +137,7 @@ def create_generation_for_run(
             "provider": provider,
             "model_name": model_name,
             "prompt_version": prompt_version,
+            "input_collage_artifact_id": collage_artifact.id,
         },
     )
     db.add(artifact)

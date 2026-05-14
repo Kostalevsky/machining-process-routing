@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     render_camera_dist_min: float = 2.0
     render_camera_dist_max: float = 2.0
     render_timeout_seconds: int = 300
+    ml_default_provider: str = "stub"
+    ml_default_model_name: str = "mock-generator"
+    ml_prompt_version: str = "v1"
+    ml_enable_rag: bool = True
+    ml_enable_ru_labels: bool = True
+    ml_export_debug_fields: bool = False
+    ml_qwen_api_key: str | None = None
+    ml_qwen_base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    ml_mistral_api_key: str | None = None
+    ml_openai_api_key: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
