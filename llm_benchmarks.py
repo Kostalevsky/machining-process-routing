@@ -6,17 +6,36 @@ import re
 import numpy as np
 import pandas as pd
 from typing import Any, Dict, List, Optional
-from mistralai import Mistral
+from mistralai.client import Mistral
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+
+run_mistral_model = os.getenv("RUN_MISTRAL", "false").lower() == "true"
+run_qwen_72b_model = os.getenv("RUN_QWEN_72B", "false").lower() == "true"
+run_qwen_vl_max_model = os.getenv("RUN_QWEN_VL_MAX", "true").lower() == "true"
+
+run_rag = os.getenv("RUN_RAG", "true").lower() == "true"
+run_no_rag = os.getenv("RUN_NO_RAG", "false").lower() == "true"
+
+type_names = []
+if run_no_rag:
+    type_names.append("results_no_rag")
+if run_rag:
+    type_names.append("results_rag")
 
 
 prompt_path3 = "./example_material/prompts/prompt_3.txt"
 prompt_path4 = "./example_material/prompts/prompt_4.txt"
 prompt_path6 = "./example_material/prompts/prompt_6.txt"
 
-DEBUG_NORMALIZATION = True
+DEBUG_NORMALIZATION = False
+DEBUG_PROMPTS = False
+DEBUG_PROMPTS_DIR = "./debug_prompts"
+
+ENABLE_RU_LABELS = True
+EXPORT_DEBUG_FIELDS = False
 
 ALLOWED_ACTIONS = {
     "turning", "facing", "boring", "threading", "drilling", "reaming",
@@ -27,6 +46,111 @@ ALLOWED_ACTIONS = {
     "electro-discharge machining (EDM)", "laser cutting", "waterjet cutting",
     "assembly", "marking", "non-destructive testing (NDT)"
 }
+
+
+ACTION_RU_MAP = {
+    "turning": "точение",
+    "facing": "торцевание",
+    "boring": "растачивание",
+    "threading": "нарезание резьбы",
+    "drilling": "сверление",
+    "reaming": "развёртывание",
+    "milling": "фрезерование",
+    "slotting": "долбление паза",
+    "key-seating": "обработка шпоночного паза",
+    "broaching": "протягивание",
+    "heat-treatment": "термообработка",
+    "deburring": "удаление заусенцев",
+    "sand-blasting": "пескоструйная обработка",
+    "grinding": "шлифование",
+    "polishing": "полирование",
+    "quality-inspection": "контроль качества",
+    "surface-coating": "нанесение покрытия",
+    "packaging": "упаковка",
+    "cutting-off": "отрезка",
+    "knurling": "накатка",
+    "tapping": "нарезание внутренней резьбы",
+    "lapping": "доводка",
+    "honing": "хонингование",
+    "burnishing": "выглаживание",
+    "electro-discharge machining (EDM)": "электроэрозионная обработка",
+    "laser cutting": "лазерная резка",
+    "waterjet cutting": "гидроабразивная резка",
+    "assembly": "сборка",
+    "marking": "маркировка",
+    "non-destructive testing (NDT)": "неразрушающий контроль",
+}
+
+STAGE_RU_MAP = {
+    "roughing": "черновая обработка",
+    "semi-finishing": "получистовая обработка",
+    "finishing": "чистовая обработка",
+    "quality-inspection": "контроль качества",
+    "packaging": "упаковка",
+}
+
+EQUIPMENT_RU_MAP = {
+    "band saw": "ленточнопильный станок",
+    "turning tools": "токарные резцы",
+    "boring bar": "расточная оправка",
+    "drill bit": "сверло",
+    "reamer": "развёртка",
+    "5-axis cnc milling machine": "5-осевой фрезерный станок с ЧПУ",
+    "end mills": "концевые фрезы",
+    "slotting cutter": "пазовая фреза",
+    "broaching machine": "протяжной станок",
+    "broach tool": "протяжка",
+    "tap": "метчик",
+    "die": "плашка",
+    "industrial furnace": "промышленная печь",
+    "quenching bath": "закалочная ванна",
+    "surface grinder": "плоскошлифовальный станок",
+    "cylindrical grinder": "круглошлифовальный станок",
+    "honing machine": "хонинговальный станок",
+    "lapping machine": "доводочный станок",
+    "manual deburring tools": "ручной инструмент для удаления заусенцев",
+    "automated deburring machine": "автоматизированный станок для удаления заусенцев",
+    "sand-blast cabinet": "пескоструйная камера",
+    "burnishing tool": "выглаживающий инструмент",
+    "edm machine": "электроэрозионный станок",
+    "ultrasonic tester": "ультразвуковой дефектоскоп",
+    "magnetic particle inspection": "оборудование магнитопорошкового контроля",
+    "calipers": "штангенциркуль",
+    "micrometers": "микрометры",
+    "plasma spray coating system": "установка плазменного напыления",
+    "laser marking machine": "лазерный маркиратор",
+    "assembly fixture": "сборочное приспособление",
+    "torque wrench": "динамометрический ключ",
+    "vacuum sealer": "вакуумный упаковщик",
+    "packaging box": "упаковочная коробка",
+    "cad/cam software": "CAD/CAM-система",
+    "computer": "компьютер",
+    "cnc lathe": "токарный станок с ЧПУ",
+    "cnc milling machine": "фрезерный станок с ЧПУ",
+    "cmm": "координатно-измерительная машина",
+    "manual deburring tool": "ручной инструмент для удаления заусенцев",
+    "laser marker": "лазерный маркиратор",
+    "manual packaging station": "участок ручной упаковки",
+}
+
+
+def _save_debug_text(path: str, text: Any):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(str(text))
+
+
+def _build_debug_run_id():
+    from datetime import datetime
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+DEBUG_RUN_ID = _build_debug_run_id() if DEBUG_PROMPTS else None
+
+
+def _debug_prompt_dir(model_name: str, data_type: str, image_path: str) -> str:
+    part_id = os.path.splitext(os.path.basename(image_path))[0]
+    return os.path.join(DEBUG_PROMPTS_DIR, DEBUG_RUN_ID, model_name, data_type, part_id)
 
 
 def validate_process_json(data: dict) -> dict:
@@ -76,13 +200,13 @@ def validate_process_json(data: dict) -> dict:
         "threading": ["lathe"],
         "knurling": ["lathe"],
         "boring": ["boring", "lathe"],
-        "drilling": ["drilling", "drill"],
-        "reaming": ["reaming", "drilling", "drill"],
+        "drilling": ["drilling", "drill", "milling machine", "cnc milling machine"],
+        "reaming": ["reaming", "reamer", "milling machine", "cnc milling machine"],
         "milling": ["milling", "machining center", "machining centre"],
         "slotting": ["slotting", "milling", "machining center", "machining centre"],
         "key-seating": ["key", "slotting", "milling", "machining center", "machining centre"],
         "broaching": ["broaching"],
-        "grinding": ["grinding"],
+        "grinding": ["grinding", "grinder"],
         "polishing": ["polishing"],
         "deburring": ["deburring"],
         "heat-treatment": ["heat"],
@@ -98,7 +222,7 @@ def validate_process_json(data: dict) -> dict:
         "laser cutting": ["laser"],
         "waterjet cutting": ["waterjet"],
         "assembly": ["assembly"],
-        "marking": ["marking"],
+        "marking": ["marking", "marker", "laser marker"],
         "non-destructive testing (NDT)": ["ndt", "inspection", "testing"],
     }
 
@@ -183,9 +307,14 @@ def _normalize_text(s):
 
 
 def _normalize_action(value: Any) -> str:
+    original_raw = _normalize_text(value)
     raw = _strip_stage_words_from_action(value)
 
     if not raw:
+        if _normalize_stage(original_raw) == "quality-inspection":
+            return "quality-inspection"
+        if _normalize_stage(original_raw) == "packaging":
+            return "packaging"
         return ""
 
     action_aliases = {
@@ -364,6 +493,40 @@ def normalize_step(step: Dict[str, Any], step_index: int) -> Dict[str, Any]:
     normalized_stage = explicit_stage or inferred_stage_from_action
 
     normalized_action = _normalize_action(raw_action)
+
+    equipment_text_for_action = (
+        " ".join(str(x) for x in raw_equipment)
+        if isinstance(raw_equipment, list)
+        else str(raw_equipment or "")
+    ).lower()
+
+    if normalized_action not in ALLOWED_ACTIONS or normalized_action == "facing":
+        if "reamer" in equipment_text_for_action:
+            normalized_action = "reaming"
+        elif "honing" in equipment_text_for_action:
+            normalized_action = "honing"
+        elif "slotting" in equipment_text_for_action or "slotting cutter" in equipment_text_for_action:
+            normalized_action = "slotting"
+        elif "knurling" in equipment_text_for_action:
+            normalized_action = "knurling"
+        elif "cmm" in equipment_text_for_action or "coordinate measuring" in equipment_text_for_action:
+            normalized_action = "quality-inspection"
+        elif "packaging" in equipment_text_for_action or "vacuum sealer" in equipment_text_for_action:
+            normalized_action = "packaging"
+        elif "grinder" in equipment_text_for_action or "grinding" in equipment_text_for_action:
+            normalized_action = "grinding"
+        elif "lapping" in equipment_text_for_action:
+            normalized_action = "lapping"
+        elif "honing" in equipment_text_for_action:
+            normalized_action = "honing"
+        elif "polishing" in equipment_text_for_action or "abrasive pad" in equipment_text_for_action:
+            normalized_action = "polishing"
+        elif "burnishing" in equipment_text_for_action:
+            normalized_action = "burnishing"
+        elif "sand-blast" in equipment_text_for_action or "sandblast" in equipment_text_for_action:
+            normalized_action = "sand-blasting"
+        elif "coating" in equipment_text_for_action or "plasma spray" in equipment_text_for_action:
+            normalized_action = "surface-coating"
 
     if isinstance(raw_equipment, list):
         equipment_list = [str(x).strip() for x in raw_equipment if str(x).strip()]
@@ -567,8 +730,36 @@ def normalize_process_json(data: Dict[str, Any]) -> Dict[str, Any]:
     raw_steps = _extract_steps_for_rag(data)
     normalized_steps = []
 
+    def _is_non_machining_planning_step(step: Dict[str, Any]) -> bool:
+        if not isinstance(step, dict):
+            return False
+
+        text = " ".join([
+            str(step.get("Action", "")),
+            " ".join(str(x) for x in step.get("Equipment", [])) if isinstance(step.get("Equipment", []), list) else str(step.get("Equipment", "")),
+        ]).lower()
+
+        planning_markers = [
+            "cad/cam",
+            "cad cam",
+            "computer",
+            "analyzing",
+            "analysing",
+            "3d model",
+            "cnc program",
+            "programming",
+            "generate cnc",
+        ]
+
+        return any(marker in text for marker in planning_markers)
+
     for idx, step in enumerate(raw_steps, start=1):
         normalized_steps.append(normalize_step(step, idx))
+    
+    normalized_steps = [
+        step for step in normalized_steps
+        if not _is_non_machining_planning_step(step)
+    ]
 
     normalized_steps = sorted(
         normalized_steps,
@@ -590,6 +781,97 @@ def normalize_process_json(data: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     return normalized
+
+
+def _translate_equipment_to_ru(equipment: Any) -> List[str]:
+    if isinstance(equipment, list):
+        items = equipment
+    elif equipment:
+        items = [equipment]
+    else:
+        items = []
+
+    translated = []
+    for item in items:
+        key = _normalize_equipment(item)
+        ru = EQUIPMENT_RU_MAP.get(key, str(item).strip())
+        if ru:
+            translated.append(ru)
+
+    dedup = []
+    seen = set()
+    for item in translated:
+        low = item.lower()
+        if low not in seen:
+            dedup.append(item)
+            seen.add(low)
+
+    return dedup
+
+
+def add_russian_labels(data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return data
+
+    result = dict(data)
+
+    operation_name = str(result.get("Name of operation", "") or "").strip()
+
+    operation_name_ru_map = {
+        "manufacturing process": "Технологический маршрут обработки",
+        "machining process": "Технологический маршрут механической обработки",
+        "production process": "Производственный процесс",
+    }
+
+    if operation_name:
+        result["Name of operation RU"] = operation_name_ru_map.get(
+            operation_name.lower(),
+            operation_name
+        )
+    else:
+        result["Name of operation RU"] = "Технологический маршрут обработки"
+
+    steps = result.get("Steps", [])
+    if not isinstance(steps, list):
+        return result
+
+    localized_steps = []
+    for step in steps:
+        if not isinstance(step, dict):
+            localized_steps.append(step)
+            continue
+
+        localized_step = dict(step)
+
+        action = str(localized_step.get("Action", "") or "").strip()
+        stage = str(localized_step.get("Stage", "") or "").strip()
+        equipment = localized_step.get("Equipment", [])
+
+        localized_step["Action RU"] = ACTION_RU_MAP.get(action, action)
+        localized_step["Stage RU"] = STAGE_RU_MAP.get(stage, stage)
+        localized_step["Equipment RU"] = _translate_equipment_to_ru(equipment)
+
+        localized_steps.append(localized_step)
+
+    result["Steps"] = localized_steps
+    return result
+
+
+def strip_internal_fields(data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return data
+
+    result = dict(data)
+
+    internal_keys = {
+        "_normalization_debug",
+        "_validation",
+    }
+
+    for key in internal_keys:
+        result.pop(key, None)
+
+    return result
 
 
 def encode_image_to_base64(image_path: str) -> str:
@@ -850,6 +1132,7 @@ def generate_response_from_image_mistral(image_path, prompt, api_key, data_type)
 
     csv_path = "./example_material/equipment_iso_ru.csv"
     image_hint = f"\n\n[Image file: {os.path.basename(image_path)}]"
+    debug_dir = _debug_prompt_dir("pixtral_12b", data_type, image_path) if DEBUG_PROMPTS else None
 
     if data_type == "RAG":
         draft_prompt = (
@@ -859,7 +1142,14 @@ def generate_response_from_image_mistral(image_path, prompt, api_key, data_type)
             + "Return ONLY valid JSON. Create a draft process where each step contains Action and Equipment fields. "
             + "Do NOT include ISO in this first pass (use ISO: [] or omit ISO)."
         )
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "first_pass_prompt.txt"), draft_prompt)
+
         draft_text = _call(draft_prompt)
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "first_pass_response.txt"), draft_text)
 
         draft_json = _safe_json_loads(draft_text)
         if draft_json:
@@ -867,7 +1157,12 @@ def generate_response_from_image_mistral(image_path, prompt, api_key, data_type)
         steps = _extract_steps_for_rag(draft_json) if draft_json else []
 
         if steps:
-            step_rag_context = _build_step_level_rag_context(steps, csv_path=csv_path, max_rows_per_step=5)
+            step_rag_context = _build_step_level_rag_context(
+                steps,
+                csv_path=csv_path,
+                max_rows_per_step=5
+            )
+
             full_prompt = (
                 prompt
                 + image_hint
@@ -875,14 +1170,53 @@ def generate_response_from_image_mistral(image_path, prompt, api_key, data_type)
                 + "Return ONLY valid JSON. Produce the final process JSON and fill ISO per step using the STEP-LEVEL RAG CONTEXT below.\n\n"
                 + step_rag_context
             )
-            return _call(full_prompt)
+
+            if DEBUG_PROMPTS:
+                _save_debug_text(os.path.join(debug_dir, "step_rag_context.txt"), step_rag_context)
+                _save_debug_text(os.path.join(debug_dir, "second_pass_prompt.txt"), full_prompt)
+
+            second_pass_response = _call(full_prompt)
+
+            if DEBUG_PROMPTS:
+                _save_debug_text(os.path.join(debug_dir, "second_pass_response.txt"), second_pass_response)
+
+            return second_pass_response
 
         query = (prompt + "\n" + os.path.basename(image_path)).strip()
-        rag_rows = retrieve_relevant_data(query_text=query, csv_path=csv_path, top_k=20, dedup_by_iso=True)
-        rag_prompt = _format_rag_prompt(rag_rows, header="Use the ISO KB below when filling ISO fields.")
-        return _call(prompt + image_hint + "\n\n" + rag_prompt)
+        rag_rows = retrieve_relevant_data(
+            query_text=query,
+            csv_path=csv_path,
+            top_k=20,
+            dedup_by_iso=True
+        )
+        rag_prompt = _format_rag_prompt(
+            rag_rows,
+            header="Use the ISO KB below when filling ISO fields."
+        )
 
-    return _call(prompt + image_hint)
+        fallback_prompt = prompt + image_hint + "\n\n" + rag_prompt
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "fallback_rag_prompt.txt"), fallback_prompt)
+
+        fallback_response = _call(fallback_prompt)
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "fallback_response.txt"), fallback_response)
+
+        return fallback_response
+
+    single_pass_prompt = prompt + image_hint
+
+    if DEBUG_PROMPTS:
+        _save_debug_text(os.path.join(debug_dir, "single_pass_prompt.txt"), single_pass_prompt)
+
+    single_pass_response = _call(single_pass_prompt)
+
+    if DEBUG_PROMPTS:
+        _save_debug_text(os.path.join(debug_dir, "single_pass_response.txt"), single_pass_response)
+
+    return single_pass_response
 
 
 def generate_response_from_image_qwen(image_path, model_name, prompt, my_api_key, data_type):
@@ -910,6 +1244,7 @@ def generate_response_from_image_qwen(image_path, model_name, prompt, my_api_key
 
     csv_path = "./example_material/equipment_iso_ru.csv"
     image_hint = f"\n\n[Image file: {os.path.basename(image_path)}]"
+    debug_dir = _debug_prompt_dir(model_name, data_type, image_path) if DEBUG_PROMPTS else None
 
     if data_type == "RAG":
         draft_prompt = (
@@ -919,7 +1254,14 @@ def generate_response_from_image_qwen(image_path, model_name, prompt, my_api_key
             + "Return ONLY valid JSON. Create a draft process where each step contains Action and Equipment fields. "
             + "Do NOT include ISO in this first pass (use ISO: [] or omit ISO)."
         )
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "first_pass_prompt.txt"), draft_prompt)
+
         draft_text = _call(draft_prompt)
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "first_pass_response.txt"), draft_text)
 
         draft_json = _safe_json_loads(draft_text)
         if draft_json:
@@ -927,7 +1269,12 @@ def generate_response_from_image_qwen(image_path, model_name, prompt, my_api_key
         steps = _extract_steps_for_rag(draft_json) if draft_json else []
 
         if steps:
-            step_rag_context = _build_step_level_rag_context(steps, csv_path=csv_path, max_rows_per_step=5)
+            step_rag_context = _build_step_level_rag_context(
+                steps,
+                csv_path=csv_path,
+                max_rows_per_step=5
+            )
+
             full_prompt = (
                 prompt
                 + image_hint
@@ -935,14 +1282,53 @@ def generate_response_from_image_qwen(image_path, model_name, prompt, my_api_key
                 + "Return ONLY valid JSON. Produce the final process JSON and fill ISO per step using the STEP-LEVEL RAG CONTEXT below.\n\n"
                 + step_rag_context
             )
-            return _call(full_prompt)
+
+            if DEBUG_PROMPTS:
+                _save_debug_text(os.path.join(debug_dir, "step_rag_context.txt"), step_rag_context)
+                _save_debug_text(os.path.join(debug_dir, "second_pass_prompt.txt"), full_prompt)
+
+            second_pass_response = _call(full_prompt)
+
+            if DEBUG_PROMPTS:
+                _save_debug_text(os.path.join(debug_dir, "second_pass_response.txt"), second_pass_response)
+
+            return second_pass_response
 
         query = (prompt + "\n" + os.path.basename(image_path)).strip()
-        rag_rows = retrieve_relevant_data(query_text=query, csv_path=csv_path, top_k=20, dedup_by_iso=True)
-        rag_prompt = _format_rag_prompt(rag_rows, header="Use the ISO KB below when filling ISO fields.")
-        return _call(prompt + image_hint + "\n\n" + rag_prompt)
+        rag_rows = retrieve_relevant_data(
+            query_text=query,
+            csv_path=csv_path,
+            top_k=20,
+            dedup_by_iso=True
+        )
+        rag_prompt = _format_rag_prompt(
+            rag_rows,
+            header="Use the ISO KB below when filling ISO fields."
+        )
 
-    return _call(prompt + image_hint)
+        fallback_prompt = prompt + image_hint + "\n\n" + rag_prompt
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "fallback_rag_prompt.txt"), fallback_prompt)
+
+        fallback_response = _call(fallback_prompt)
+
+        if DEBUG_PROMPTS:
+            _save_debug_text(os.path.join(debug_dir, "fallback_response.txt"), fallback_response)
+
+        return fallback_response
+
+    single_pass_prompt = prompt + image_hint
+
+    if DEBUG_PROMPTS:
+        _save_debug_text(os.path.join(debug_dir, "single_pass_prompt.txt"), single_pass_prompt)
+
+    single_pass_response = _call(single_pass_prompt)
+
+    if DEBUG_PROMPTS:
+        _save_debug_text(os.path.join(debug_dir, "single_pass_response.txt"), single_pass_response)
+
+    return single_pass_response
 
 
 def run_mistral(api_key, image_path, prompt, data_type):
@@ -1042,6 +1428,9 @@ def save_jsons(json_pkl_paths, json_collages_paths):
 
             if not parsed.get("Name of operation"):
                 parsed["Name of operation"] = "Manufacturing Process"
+            
+            if ENABLE_RU_LABELS:
+                parsed = add_russian_labels(parsed)
 
             validation = validate_process_json(parsed)
             if DEBUG_NORMALIZATION:
@@ -1055,9 +1444,11 @@ def save_jsons(json_pkl_paths, json_collages_paths):
                 parsed["_normalization_debug"]["validator_warnings"] = validation.get("warnings", [])
             parsed["_validation"] = validation
 
+            output_data = parsed if EXPORT_DEBUG_FIELDS else strip_internal_fields(parsed)
+
             output_path = os.path.join(out_dir, f"{key}.json")
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(parsed, f, ensure_ascii=False, indent=4)
+                json.dump(output_data, f, ensure_ascii=False, indent=4)
 
 
 def llm_benchmark(api_key_qwen, api_key_mistral):
@@ -1067,7 +1458,7 @@ def llm_benchmark(api_key_qwen, api_key_mistral):
         "./example_material/collages_6",
     )
 
-    for type_name in ["results_no_rag", "results_rag"]:
+    for type_name in type_names:
         data_type = "RAG" if type_name == "results_rag" else "NO_RAG"
 
         mistral_pkl_path3 = f"./{type_name}/json_responses/json_mistral_3.pkl"
@@ -1082,47 +1473,47 @@ def llm_benchmark(api_key_qwen, api_key_mistral):
         qwen_72b_pkl_path4 = f"./{type_name}/json_responses/json_qwen2_vl_72b_instruct_4.pkl"
         qwen_72b_pkl_path6 = f"./{type_name}/json_responses/json_qwen2_vl_72b_instruct_6.pkl"
 
-        create_json_with_mistral(object_path3, prompt_path3, mistral_pkl_path3, api_key_mistral, data_type)
-        create_json_with_mistral(object_path4, prompt_path4, mistral_pkl_path4, api_key_mistral, data_type)
-        create_json_with_mistral(object_path6, prompt_path6, mistral_pkl_path6, api_key_mistral, data_type)
+        if run_mistral_model:
+            create_json_with_mistral(object_path3, prompt_path3, mistral_pkl_path3, api_key_mistral, data_type)
+            create_json_with_mistral(object_path4, prompt_path4, mistral_pkl_path4, api_key_mistral, data_type)
+            create_json_with_mistral(object_path6, prompt_path6, mistral_pkl_path6, api_key_mistral, data_type)
 
-        create_json_with_qwen(api_key_qwen, "qwen-vl-max", object_path3, prompt_path3, vl_max_pkl_path3, data_type)
-        create_json_with_qwen(api_key_qwen, "qwen-vl-max", object_path4, prompt_path4, vl_max_pkl_path4, data_type)
-        create_json_with_qwen(api_key_qwen, "qwen-vl-max", object_path6, prompt_path6, vl_max_pkl_path6, data_type)
+        if run_qwen_vl_max_model:
+            create_json_with_qwen(api_key_qwen, "qwen-vl-max", object_path3, prompt_path3, vl_max_pkl_path3, data_type)
+            create_json_with_qwen(api_key_qwen, "qwen-vl-max", object_path4, prompt_path4, vl_max_pkl_path4, data_type)
+            create_json_with_qwen(api_key_qwen, "qwen-vl-max", object_path6, prompt_path6, vl_max_pkl_path6, data_type)
 
-        create_json_with_qwen(
-            api_key_qwen, "qwen2.5-vl-72b-instruct", object_path3, prompt_path3, qwen_72b_pkl_path3, data_type
-        )
-        create_json_with_qwen(
-            api_key_qwen, "qwen2.5-vl-72b-instruct", object_path4, prompt_path4, qwen_72b_pkl_path4, data_type
-        )
-        create_json_with_qwen(
-            api_key_qwen, "qwen2.5-vl-72b-instruct", object_path6, prompt_path6, qwen_72b_pkl_path6, data_type
-        )
+        if run_qwen_72b_model:
+            create_json_with_qwen(api_key_qwen, "qwen2.5-vl-72b-instruct", object_path3, prompt_path3, qwen_72b_pkl_path3, data_type)
+            create_json_with_qwen(api_key_qwen, "qwen2.5-vl-72b-instruct", object_path4, prompt_path4, qwen_72b_pkl_path4, data_type)
+            create_json_with_qwen(api_key_qwen, "qwen2.5-vl-72b-instruct", object_path6, prompt_path6, qwen_72b_pkl_path6, data_type)
 
-        save_jsons(
-            [qwen_72b_pkl_path3, qwen_72b_pkl_path4, qwen_72b_pkl_path6],
-            [
-                f"./{type_name}/json_responses/qwen2_5_vl_72b/collages_3",
-                f"./{type_name}/json_responses/qwen2_5_vl_72b/collages_4",
-                f"./{type_name}/json_responses/qwen2_5_vl_72b/collages_6",
-            ],
-        )
+        if run_qwen_72b_model:
+            save_jsons(
+                [qwen_72b_pkl_path3, qwen_72b_pkl_path4, qwen_72b_pkl_path6],
+                [
+                    f"./{type_name}/json_responses/qwen2_5_vl_72b/collages_3",
+                    f"./{type_name}/json_responses/qwen2_5_vl_72b/collages_4",
+                    f"./{type_name}/json_responses/qwen2_5_vl_72b/collages_6",
+                ],
+            )
 
-        save_jsons(
-            [vl_max_pkl_path3, vl_max_pkl_path4, vl_max_pkl_path6],
-            [
-                f"./{type_name}/json_responses/qwen_vl_max/collages_3",
-                f"./{type_name}/json_responses/qwen_vl_max/collages_4",
-                f"./{type_name}/json_responses/qwen_vl_max/collages_6",
-            ],
-        )
+        if run_qwen_vl_max_model:
+            save_jsons(
+                [vl_max_pkl_path3, vl_max_pkl_path4, vl_max_pkl_path6],
+                [
+                    f"./{type_name}/json_responses/qwen_vl_max/collages_3",
+                    f"./{type_name}/json_responses/qwen_vl_max/collages_4",
+                    f"./{type_name}/json_responses/qwen_vl_max/collages_6",
+                ],
+            )
 
-        save_jsons(
-            [mistral_pkl_path3, mistral_pkl_path4, mistral_pkl_path6],
-            [
-                f"./{type_name}/json_responses/pixtral_12b/collages_3",
-                f"./{type_name}/json_responses/pixtral_12b/collages_4",
-                f"./{type_name}/json_responses/pixtral_12b/collages_6",
-            ],
-        )
+        if run_mistral_model:
+            save_jsons(
+                [mistral_pkl_path3, mistral_pkl_path4, mistral_pkl_path6],
+                [
+                    f"./{type_name}/json_responses/pixtral_12b/collages_3",
+                    f"./{type_name}/json_responses/pixtral_12b/collages_4",
+                    f"./{type_name}/json_responses/pixtral_12b/collages_6",
+                ],
+            )

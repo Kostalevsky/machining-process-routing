@@ -390,8 +390,13 @@ def quality_assessment(data_type, api_key):
                         with open(reference_json_path, 'r', encoding='utf-8') as file:
                             reference_json = json.load(file)
 
-                        prompt = create_prompt(reference_json, generated_json)
-                        response = run_model(api_key, prompt)
+                        run_llm_judge = os.getenv("RUN_LLM_JUDGE", "false").lower() == "true"
+
+                        if run_llm_judge:
+                            prompt = create_prompt(reference_json, generated_json)
+                            response = run_model(api_key, prompt)
+                        else:
+                            response = None
 
                         if dirpath.endswith("3"):
                             count_quality("3", generated_json_path, response, results)

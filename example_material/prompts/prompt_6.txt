@@ -27,3 +27,20 @@ Requirements:
 (b) The equipment used must be specified with respect to the specifics of the operation.
 (c) The "steps" array must cover the full process: roughing, semi-finishing, finishing, quality-inspection and packaging.
 (d) The response should be JSON only, with no additional text.
+
+IMPORTANT ROUTE CONSTRAINTS:
+- Do NOT use all available operation types.
+- Select only operations that are clearly necessary for the visible part geometry.
+- Prefer a compact route of 8–14 steps.
+- Do not include EDM, laser cutting, waterjet cutting, broaching, knurling, assembly, coating, or NDT unless the geometry clearly requires it.
+- Do not include CAD/CAM programming as a machining step.
+- The process must include machining, quality-inspection, and packaging.
+- Use common machining logic: cutting-off -> turning/boring/drilling/milling -> deburring/finishing -> quality-inspection -> packaging.
+- Each Action must be exactly one item from the allowed operation list.
+- Do not write descriptive phrases in Action. For example, use "turning", not "Turning outer diameter and end faces".
+
+Do NOT include CAD/CAM programming as a process step.
+Use 8 to 14 steps only.
+Do not use every operation from the allowed list.
+Each Action must be exactly one canonical operation name from the allowed list.
+Avoid EDM, broaching, coating, assembly, NDT, knurling unless clearly visible or required by geometry.
