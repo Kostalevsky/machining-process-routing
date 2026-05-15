@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useState } from "react";
-import { UserProfile } from "../../../shared/lib/mockAuth";
+import { UserProfile } from "../../../shared/lib/session";
 import { validateEmail, validateLength, validatePhone } from "../../../shared/lib/validation";
 import { AppHeader } from "../../../widgets/app-header";
 import styles from "./ProfilePage.module.scss";

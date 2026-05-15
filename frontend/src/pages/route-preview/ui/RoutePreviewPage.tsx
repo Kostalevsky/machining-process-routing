@@ -1,19 +1,45 @@
 import { useMemo, useState } from "react";
 import { createRouteSheetPdfBlob } from "../../../shared";
-import { UserProfile } from "../../../shared/lib/mockAuth";
-import type { MockProcessResult } from "../../../shared/types/routeSheet";
-import { MockModelViewer } from "../../../shared/ui/model-viewer/MockModelViewer";
+import { UserProfile } from "../../../shared/lib/session";
+import type { ProcessResult } from "../../../shared/types/routeSheet";
+import { ModelViewer } from "../../../shared/ui/model-viewer/ModelViewer";
 import { AppHeader } from "../../../widgets/app-header";
 import styles from "./RoutePreviewPage.module.scss";
 
 type RoutePreviewPageProps = {
   currentPath: string;
   profile: UserProfile;
-  result: MockProcessResult;
+  result: ProcessResult;
   showBackButton?: boolean;
   onNavigate: (path: string, state?: Record<string, unknown>) => void;
   onLogout: () => void;
 };
+
+function getOperationName(result: ProcessResult) {
+  return (
+    result.routeSheet["Name of operation RU"] ||
+    result.routeSheet["Name of operation"] ||
+    result.uploadedFileName.replace(/\.[^.]+$/, "").trim()
+  );
+}
+
+function getStepAction(step: ProcessResult["routeSheet"]["Steps"][number]) {
+  return step["Action RU"] || step.Action;
+}
+
+function getStepStage(step: ProcessResult["routeSheet"]["Steps"][number]) {
+  return step["Stage RU"] || step.Stage || "";
+}
+
+function capitalizeFirst(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return trimmed.charAt(0).toLocaleUpperCase("ru-RU") + trimmed.slice(1);
+}
 
 export function RoutePreviewPage({
   currentPath,
@@ -44,9 +70,9 @@ export function RoutePreviewPage({
   const jsonString = useMemo(() => JSON.stringify(result.routeSheet, null, 2), [result.routeSheet]);
   const pdfBlob = useMemo(() => createRouteSheetPdfBlob(result.routeSheet), [result.routeSheet]);
   const productName = useMemo(() => {
-    const base = result.uploadedFileName.replace(/\.[^.]+$/, "").trim();
-    return base || result.routeSheet["Name of operation"];
-  }, [result.routeSheet, result.uploadedFileName]);
+    const base = getOperationName(result).trim();
+    return base || result.uploadedFileName.replace(/\.[^.]+$/, "").trim();
+  }, [result]);
 
   function truncateFileName(name: string, maxLength = 34) {
     if (name.length <= maxLength) {
@@ -179,7 +205,7 @@ export function RoutePreviewPage({
                         </div>
                         <div className={styles.topStampCenter}>
                           <div className={styles.topStampName} title={productName}>
-                            {truncateFileName(productName, 28)}
+                            {productName}
                           </div>
                         </div>
                         <div className={styles.topStampRight}>
@@ -212,26 +238,32 @@ export function RoutePreviewPage({
                           <span className={styles.paperLabel}>Документ</span>
                         </div>
                         <div>
-                          <strong title={productName}>{truncateFileName(productName, 28)}</strong>
+                          <strong title={productName}>{productName}</strong>
                         </div>
                       </div>
 
                       <div className={styles.tableHead}>
                         <span>Шаг</span>
+                        <span>Этап</span>
                         <span>Действие</span>
-                        <span>Оборудование</span>
-                        <span>ISO</span>
+                        <span>ГОСТ</span>
                       </div>
 
                       <div className={styles.steps}>
-                        {result.routeSheet.Steps.map((step) => (
-                          <div key={step["Step number"]} className={styles.stepRow}>
-                            <span>{step["Step number"]}</span>
-                            <span>{step.Action}</span>
-                            <span title={step.Equipment.join(", ")}>{step.Equipment.join(", ")}</span>
-                            <span title={step.ISO.join(", ")}>{step.ISO.join(", ")}</span>
-                          </div>
-                        ))}
+                        {result.routeSheet.Steps.map((step) => {
+                          const stage = capitalizeFirst(getStepStage(step));
+                          const action = capitalizeFirst(getStepAction(step));
+                          const iso = step.ISO.map(capitalizeFirst).join(", ");
+
+                          return (
+                            <div key={step["Step number"]} className={styles.stepRow}>
+                              <span>{step["Step number"]}</span>
+                              <span title={stage}>{stage}</span>
+                              <span title={action}>{action}</span>
+                              <span title={iso}>{iso || "—"}</span>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       <div className={styles.bottomStamp}>
@@ -252,7 +284,7 @@ export function RoutePreviewPage({
           </section>
 
           <aside className={styles.modelSection}>
-            <MockModelViewer fileName={result.uploadedFileName} modelUrl={result.modelUrl} onExpand={handleOpenModelModal} />
+            <ModelViewer fileName={result.uploadedFileName} modelUrl={result.modelUrl} onExpand={handleOpenModelModal} />
           </aside>
         </div>
       </main>
@@ -278,7 +310,7 @@ export function RoutePreviewPage({
               </button>
             </div>
 
-            <MockModelViewer
+            <ModelViewer
               fileName={result.uploadedFileName}
               modelUrl={result.modelUrl}
               mode="modal"

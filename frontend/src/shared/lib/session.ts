@@ -12,15 +12,15 @@ export type UserProfile = {
   about: string;
 };
 
-const STORAGE_KEY = "cad2tech.mock-auth";
+const STORAGE_KEY = "cad2tech.session";
 
 const defaultProfile: UserProfile = {
-  fullName: "Анна Смирнова",
-  email: "anna.smirnova@cad2tech.ru",
-  phone: "+7 (999) 123-45-67",
-  company: "CAD2Tech",
-  role: "Инженер-проектировщик",
-  about: "Курирую загрузку моделей, проверяю результаты обработки и синхронизирую данные между командами.",
+  fullName: "",
+  email: "",
+  phone: "",
+  company: "",
+  role: "",
+  about: "",
 };
 
 type SessionState = {
@@ -111,7 +111,7 @@ export async function restoreSession() {
   }
 }
 
-export async function loginWithMock(email: string, password: string) {
+export async function loginWithApi(email: string, password: string) {
   try {
     const user = await login({ email: email.trim(), password });
     const current = readState();
@@ -132,7 +132,7 @@ export async function loginWithMock(email: string, password: string) {
   }
 }
 
-export async function registerWithMock(profile: Pick<UserProfile, "fullName" | "email" | "company" | "role"> & { password: string }) {
+export async function registerWithApi(profile: Pick<UserProfile, "fullName" | "email" | "company" | "role"> & { password: string }) {
   try {
     const user = await register({ email: profile.email.trim(), password: profile.password });
     const nextProfile = mergeUserProfile(
@@ -141,7 +141,6 @@ export async function registerWithMock(profile: Pick<UserProfile, "fullName" | "
         fullName: profile.fullName,
         company: profile.company,
         role: profile.role,
-        about: `Профиль ${profile.fullName} создан через серверную авторизацию.`,
       },
       user,
     );
@@ -164,7 +163,7 @@ export async function registerWithMock(profile: Pick<UserProfile, "fullName" | "
   }
 }
 
-export async function updateMockProfile(profile: UserProfile) {
+export async function updateProfile(profile: UserProfile) {
   writeState({
     isAuthenticated: true,
     profile,
@@ -188,7 +187,7 @@ export async function updateMockProfile(profile: UserProfile) {
   };
 }
 
-export function logoutMock() {
+export function logoutSession() {
   const current = readState();
 
   logout();

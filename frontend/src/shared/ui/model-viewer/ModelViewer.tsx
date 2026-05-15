@@ -2,9 +2,9 @@ import { ReactNode, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import styles from "./MockModelViewer.module.scss";
+import styles from "./ModelViewer.module.scss";
 
-type MockModelViewerProps = {
+type ModelViewerProps = {
     fileName: string;
     modelUrl?: string;
     mode?: "card" | "modal";
@@ -138,13 +138,13 @@ function fitCameraToObject(
     };
 }
 
-export function MockModelViewer({
+export function ModelViewer({
     fileName,
     modelUrl,
     mode = "card",
     onExpand,
     modalOverlay,
-}: MockModelViewerProps) {
+}: ModelViewerProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const sceneRef = useRef<ViewerScene | null>(null);
     const isModal = mode === "modal";

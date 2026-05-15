@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
-import { UserProfile } from "../../../shared/lib/mockAuth";
+import { UserProfile } from "../../../shared/lib/session";
 import { validateEmail, validateLength, validatePassword } from "../../../shared/lib/validation";
-import styles from "./AuthPage.module.css";
+import styles from "./AuthPage.module.scss";
 
 type AuthMode = "login" | "register";
 

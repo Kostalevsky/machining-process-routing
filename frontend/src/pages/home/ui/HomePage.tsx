@@ -1,5 +1,5 @@
 import { ModelUploadCard, useModelProcessing } from "../../../features/model-processing";
-import { UserProfile } from "../../../shared/lib/mockAuth";
+import { UserProfile } from "../../../shared/lib/session";
 import { AppHeader } from "../../../widgets/app-header";
 import { ResultsSection } from "../../../widgets/render-results";
 import styles from "./HomePage.module.scss";

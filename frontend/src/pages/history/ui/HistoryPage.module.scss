@@ -64,9 +64,11 @@
 }
 
 .card {
+  min-width: 0;
   display: grid;
   gap: 16px;
   padding: 22px;
+  overflow: hidden;
   border: 1px solid #dddddd;
   border-radius: 24px;
   background: #ffffff;
@@ -90,21 +92,37 @@
 }
 
 .cardHeader {
+  min-width: 0;
   display: flex;
   justify-content: space-between;
   gap: 14px;
 }
 
+.cardHeader > div {
+  min-width: 0;
+}
+
 .cardHeader h2 {
   font-size: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cardHeader p {
   margin-top: 6px;
   color: #696969;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status {
+  flex: 0 0 auto;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   height: fit-content;
   padding: 8px 12px;
   border-radius: 999px;
@@ -114,6 +132,7 @@
 }
 
 .meta {
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
@@ -121,6 +140,7 @@
 }
 
 .meta div {
+  min-width: 0;
   display: grid;
   gap: 6px;
   padding: 12px;
@@ -129,6 +149,10 @@
 }
 
 .meta dt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #777777;
   font-size: 12px;
   letter-spacing: 0.06em;
@@ -136,7 +160,11 @@
 }
 
 .meta dd {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
 }
 

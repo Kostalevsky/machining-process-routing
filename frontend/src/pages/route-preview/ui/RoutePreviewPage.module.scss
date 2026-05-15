@@ -160,7 +160,7 @@
 }
 
 .coverPage .pageInner {
-  grid-template-rows: 96px 1fr 74px;
+  grid-template-rows: minmax(96px, auto) 1fr 74px;
 }
 
 .stepsPage .pageInner {
@@ -171,6 +171,7 @@
   display: grid;
   grid-template-columns: 118px 1fr 110px;
   border-bottom: 1px solid rgba(80, 80, 80, 0.45);
+  min-height: 96px;
 }
 
 .topStampLeft,
@@ -222,9 +223,14 @@
 
 .topStampName {
   border-bottom: 0;
-  font-size: 18px;
+  padding: 8px 14px;
+  text-align: center;
+  font-size: clamp(14px, 1.65vw, 18px);
   font-weight: 700;
   font-style: italic;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .pageCenter {
@@ -309,6 +315,12 @@
   gap: 12px;
   padding: 18px 18px 14px;
   border-bottom: 1px solid rgba(80, 80, 80, 0.45);
+}
+
+.pageHeader strong {
+  display: block;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 .paperLabel {

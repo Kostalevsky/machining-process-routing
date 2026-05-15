@@ -78,17 +78,6 @@ export function ModelUploadCard({
         </button>
 
         <div className={styles.footer}>
-          {/* <label className={styles.control}>
-            <span className={styles.controlLabel}>Профиль рендера</span>
-            <select
-              value={engine}
-              onChange={(event) => onEngineChange(event.target.value as "type1" | "type2")}
-              className={styles.select}
-            >
-              <option value="type1">Быстрый (8 видов)</option>
-              <option value="type2">Детальный (16 видов)</option>
-            </select>
-          </label> */}
           <Pipeline stage={stage} />
 
           <button type="button" disabled={!canSubmit} onClick={onSubmit} className={styles.submitButton}>

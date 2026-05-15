@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { simulateSuccessfulProcessing } from "../../../shared";
+import { processModel } from "../../../shared";
 import { validateModelFile } from "../../../shared/lib/validation";
 import type { Stage } from "../../../shared";
 
@@ -60,7 +60,7 @@ export function useModelProcessing({ onComplete }: UseModelProcessingOptions = {
       setStage("rendering");
       await new Promise((resolve) => window.setTimeout(resolve, 500));
       setStage("postprocess");
-      const data = await simulateSuccessfulProcessing(file);
+      const data = await processModel(file);
       setJobId(data.jobId);
       setStage("done");
       onComplete?.();

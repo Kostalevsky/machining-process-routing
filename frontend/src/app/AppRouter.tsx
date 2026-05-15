@@ -4,15 +4,15 @@ import { HistoryPage } from "../pages/history";
 import { HomePage } from "../pages/home";
 import { ProfilePage } from "../pages/profile";
 import { RoutePreviewPage } from "../pages/route-preview";
-import { getCurrentMockResult } from "../shared";
+import { getCurrentProcessResult } from "../shared";
 import {
   getSessionState,
-  loginWithMock,
-  logoutMock,
-  registerWithMock,
+  loginWithApi,
+  logoutSession,
+  registerWithApi,
   restoreSession,
-  updateMockProfile,
-} from "../shared/lib/mockAuth";
+  updateProfile,
+} from "../shared/lib/session";
 
 export function AppRouter() {
   const [pathname, setPathname] = useState(window.location.pathname || "/");
@@ -20,7 +20,7 @@ export function AppRouter() {
     (window.history.state as Record<string, unknown> | null) ?? null
   );
   const [session, setSession] = useState(getSessionState);
-  const previewResult = pathname === "/route-preview" ? getCurrentMockResult() : null;
+  const previewResult = pathname === "/route-preview" ? getCurrentProcessResult() : null;
 
   useEffect(() => {
     if (!session.isAuthenticated) {
@@ -75,7 +75,7 @@ export function AppRouter() {
   }
 
   async function handleLogin(email: string, password: string) {
-    const result = await loginWithMock(email, password);
+    const result = await loginWithApi(email, password);
 
     if (!result.success) {
       return result.error;
@@ -86,8 +86,8 @@ export function AppRouter() {
     return null;
   }
 
-  async function handleRegister(profile: Parameters<typeof registerWithMock>[0]) {
-    const result = await registerWithMock(profile);
+  async function handleRegister(profile: Parameters<typeof registerWithApi>[0]) {
+    const result = await registerWithApi(profile);
 
     if (!result.success) {
       return result.error;
@@ -99,13 +99,13 @@ export function AppRouter() {
   }
 
   function handleLogout() {
-    logoutMock();
+    logoutSession();
     setSession(getSessionState());
     navigate("/login");
   }
 
-  function handleProfileSave(profile: Parameters<typeof updateMockProfile>[0]) {
-    updateMockProfile(profile);
+  function handleProfileSave(profile: Parameters<typeof updateProfile>[0]) {
+    updateProfile(profile);
     setSession(getSessionState());
   }
 

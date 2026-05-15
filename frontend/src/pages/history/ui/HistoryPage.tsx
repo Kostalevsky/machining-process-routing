@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { getApiErrorMessage } from "../../../shared/api/client";
 import { getRun, listRuns } from "../../../shared/api/runsApi";
 import type { RunResponse } from "../../../shared/api/types";
-import { createProcessResultFromRun, setCurrentMockResult } from "../../../shared";
-import { UserProfile } from "../../../shared/lib/mockAuth";
+import { createProcessResultFromRun, setCurrentProcessResult } from "../../../shared";
+import { UserProfile } from "../../../shared/lib/session";
 import { AppHeader } from "../../../widgets/app-header";
 import styles from "./HistoryPage.module.scss";
 
@@ -80,7 +80,7 @@ export function HistoryPage({ currentPath, profile, onNavigate, onLogout }: Hist
     try {
       const freshRun = await getRun(run.id);
       const result = await createProcessResultFromRun(freshRun);
-      setCurrentMockResult(result);
+      setCurrentProcessResult(result);
       onNavigate("/route-preview", { from: "history" });
     } catch (openError) {
       setError(getApiErrorMessage(openError));

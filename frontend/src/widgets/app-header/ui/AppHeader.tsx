@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { UserProfile } from "../../../shared/lib/mockAuth";
+import { UserProfile } from "../../../shared/lib/session";
 import styles from "./AppHeader.module.scss";
 
 type AppHeaderProps = {

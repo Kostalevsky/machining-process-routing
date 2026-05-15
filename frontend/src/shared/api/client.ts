@@ -9,9 +9,6 @@ type RetriableRequestConfig = InternalAxiosRequestConfig & {
 
 export const apiClient = axios.create({
   baseURL: API_BASE,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 apiClient.interceptors.request.use((config) => {
